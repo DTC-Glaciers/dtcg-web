@@ -1,0 +1,92 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dtcgweb"
+version = "0.0.3"
+authors = [
+    { name = "DTCG Contributors", email = "" },
+]
+description = "DTCG dashboards for web."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = [
+    "API",
+    
+]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Development Status :: 1 - Planning",
+    "Private :: Do Not Upload",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Science/Research",
+    "Topic :: Database :: Front-Ends",
+    "Topic :: Scientific/Engineering :: Hydrology",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Software Development :: User Interfaces",
+]
+dependencies = [
+    "fastapi[standard]",
+    "panel[fastapi],
+]
+
+[project.optional-dependencies]
+tests = [
+    "pytest",
+    "coverage",
+    "coveralls",
+]
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme >= 1.1",
+]
+dev = [
+    "fastapi[tests,docs]",
+    "hatchling >= 1.12",
+    "build >= 0.7",
+    "pylint >= 2.16.1",
+    "flake8 >= 6.0",
+    "black >= 23.1",
+    "isort",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/DTC-Glaciers/dtcg-web"
+"Bug Tracker" = "https://github.com/DTC-Glaciers/dtcg-web/issues"
+"Documentation" = "https://dtc-glaciers.github.io"
+
+# [tool.pytest.ini_options]
+# addopts = [
+#     "--import-mode=importlib",
+# ]
+
+# [project.scripts]
+# run-dtcg = "main:main"
+# dtcg-run = "main:main"
+
+[tool.hatch.build.targets.sdist]
+packages = ["dtcgweb"]
+exclude = [
+    "logs",
+    "*.png",
+    "*.vtu",
+    "*.csv",
+    "*.nc",
+    "*.bat",
+    "*.sh",
+    "*.ipynb",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["dtcgweb"]

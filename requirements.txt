@@ -1,0 +1,5 @@
+fastapi[standard]
+panel[fastapi]
+pytest
+coverage
+coveralls

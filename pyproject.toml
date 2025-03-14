@@ -38,7 +38,7 @@ classifiers = [
 ]
 dependencies = [
     "fastapi[standard]",
-    "panel[fastapi],
+    "panel[fastapi]",
 ]
 
 [project.optional-dependencies]

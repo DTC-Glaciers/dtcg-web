@@ -23,6 +23,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from panel.io.fastapi import add_application
+
 from dtcgweb.ui.interface.apps.pn_runoff import get_runoff_dashboard
 
 app = FastAPI()
@@ -40,7 +41,8 @@ app.add_middleware(  # TODO: Bremen cluster support
 
 # app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# @app.get('/favicon.ico')
+
+# @app.get("/favicon.ico")
 # async def favicon():
 #     file_name = "favicon.png"
 #     assert isinstance(app.root_path, str)
@@ -50,7 +52,10 @@ app.add_middleware(  # TODO: Bremen cluster support
 #     # assert file_path.is_file()
 #     file_path = os.path.join(app.root_path, "static", file_name)
 
-#     return FileResponse(path=file_path, headers={"Content-Disposition": "attachment; filename=" + file_name})
+#     return FileResponse(
+#         path=file_path,
+#         headers={"Content-Disposition": "attachment; filename=" + file_name},
+#     )
 
 
 """Error handling"""

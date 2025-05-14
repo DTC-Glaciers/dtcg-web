@@ -34,10 +34,10 @@ def get_runoff_dashboard():
     rs = RegionSelection()
 
     # Indicators are also set by the template.
-    # indicator_loading = pn.indicators.LoadingSpinner(
-    #     value=False, size=20, color="warning"
-    # )
-    # indicator_bar = pn.indicators.Progress(active=False, width=200)
+    indicator_loading = pn.indicators.LoadingSpinner(
+        value=False, size=20, color="warning"
+    )
+    indicator_bar = pn.indicators.Progress(active=False, width=200)
 
     # # interface
     # button = pn.widgets.Button(
@@ -81,16 +81,35 @@ def get_runoff_dashboard():
         "accept": ".shx,.shp",
         "name": "Upload Shapefile",
     }
+    button_datacube_l1 = {
+        "widget_type": pn.widgets.Button,
+        "button_type": "default",
+        "align": "center",
+        "name": "Get L1 Datacube",
+        "value": False,
+        "disabled": True,
+    }
+    button_datacube_l2 = {
+        "widget_type": pn.widgets.Button,
+        "button_type": "default",
+        "align": "center",
+        "name": "Get L2 Datacube",
+        "value": False,
+        "disabled": True,
+    }
 
     sidebar = [
         pn.Param(
             rs.param,
+            name="Select Glacier",
             widgets={
-                "get_runoff": button_runoff,
+                # "get_runoff": button_runoff,
                 "region_name": dropdown_region,
                 "subregion_name": dropdown_subregion,
                 "glacier_name": dropdown_glacier,
                 "upload_shapefile": button_upload,
+                "get_datacube_l1_button": button_datacube_l1,
+                "get_datacube_l2_button": button_datacube_l2,
             },
         ),
     ]
@@ -98,9 +117,12 @@ def get_runoff_dashboard():
     dashboard_content = [rs.plot]  # this is the dashboard content
     panel = pn.template.MaterialTemplate(
         site="DTEC Glaciers",
-        title="Dashboard",
-        # busy_indicator=indicator_loading,
+        title="Runoff Dashboard",
+        busy_indicator=indicator_loading,
         sidebar=sidebar,
+        sidebar_width=300,
+        # collapsed_sidebar=True,
         main=dashboard_content,
+        # header_background="#6bcafa",
     ).servable()
     return panel

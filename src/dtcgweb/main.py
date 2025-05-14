@@ -18,16 +18,22 @@ Copyright 2025 DTCG Contributors
 DTCG web interface.
 """
 
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from panel.io.fastapi import add_application
 
 from dtcgweb.ui.interface.apps.pn_runoff import get_runoff_dashboard
 
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
+
+BASE_DIR = Path(__file__).resolve().parent
+# app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
+templates = Jinja2Templates(directory=f"{BASE_DIR/'templates'}")
 hostname = "127.0.0.1"
 
 """Middleware

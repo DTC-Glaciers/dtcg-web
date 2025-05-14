@@ -2,13 +2,12 @@
 # If not, use requirements.yml or pyproject.toml
 fastapi[standard]
 panel[fastapi]
-dtcg @ https://github.com/DTC-Glaciers/dtcg@main
-oggm @ https://github.com/gampnico/oggm@feat-dtcg
+dtcg @ git+https://github.com/DTC-Glaciers/dtcg@main
+oggm @ git+https://github.com/gampnico/oggm@feat-dtcg
 param
 bokeh
 holoviews
 geopandas
-# used fo tests
 pytest
 numpy
 matplotlib

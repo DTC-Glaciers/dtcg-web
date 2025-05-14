@@ -114,6 +114,8 @@ class RegionSelection(param.Parameterized):
         },
     )
     get_runoff = param.Event()
+    get_datacube_l1_button = param.Event()
+    get_datacube_l2_button = param.Event()
     metadata = param.Dict(default=None)
     debug = param.Integer(default=200, bounds=(0, None))
 
@@ -124,10 +126,20 @@ class RegionSelection(param.Parameterized):
         self.artist = dtcg_plotting.HoloviewsDashboard()
         self.figure = hv.Layout()
         self.plot = pn.pane.HoloViews(self.figure, sizing_mode="scale_both")
+        pn.io.loading.start_loading_spinner(self.plot)
         self.metadata = self.get_metadata()
+        # self.metadata = self.get_glacier_names()
         self.callback_runoff = pn.bind(self.get_runoff_data, self.get_runoff)
+        self.callback_datacube_l1 = pn.bind(
+            self.get_datacube_l1, self.get_datacube_l1_button
+        )
+        self.callback_datacube_l2 = pn.bind(
+            self.get_datacube_l2, self.get_datacube_l2_button
+        )
         self._hide_params()
+
         self.update_plot()
+        pn.io.loading.stop_loading_spinner(self.plot)
 
     def _hide_params(self):
         """Hides parameters from GUI."""
@@ -138,10 +150,12 @@ class RegionSelection(param.Parameterized):
             "_glacier_names",
             # "glacier_name",
             "metadata",
+            "debug",
+            "get_runoff",
         ]:
             self.param[p_name].precedence = -1
 
-    @param.depends("shapefile_path", "upload_shapefile")
+    @param.depends("shapefile_path", "upload_shapefile", "subregion_name")
     def get_metadata(self) -> dict:
         """Get glacier metadata.
 
@@ -211,9 +225,35 @@ class RegionSelection(param.Parameterized):
         self.figure = self.artist.plot_runoff_dashboard(
             data=self.data,
             subregion_name=self.subregion_name,
-            glacier_name="",
+            glacier_name=self.glacier_name,
         )
         self.plot.object = self.figure
+        pn.io.loading.stop_loading_spinner(self.plot)
+
+    @param.depends(
+        "get_datacube_l1_button",
+        watch=True,
+    )
+    def get_datacube_l1(self):
+        """Get, process, and download L1 datacube."""
+        # TODO: disable interface while loading.
+        pn.io.loading.start_loading_spinner(self.plot)
+
+        # TODO: L1 datacube binder
+
+        pn.io.loading.stop_loading_spinner(self.plot)
+
+    @param.depends(
+        "get_datacube_l2_button",
+        watch=True,
+    )
+    def get_datacube_l2(self):
+        """Get, process, and download L1 datacube."""
+        # TODO: disable interface while loading.
+        pn.io.loading.start_loading_spinner(self.plot)
+
+        # TODO: L2 datacube binder
+
         pn.io.loading.stop_loading_spinner(self.plot)
 
     @param.depends(
@@ -232,5 +272,11 @@ class RegionSelection(param.Parameterized):
             shapefile_path=self.shapefile_path,
             **self.oggm_params,
         )
-
+        if (
+            self.glacier_name in data["glacier_data"]["Name"].dropna().values
+            and self.action == "select_glacier"
+        ):
+            data["runoff_data"] = self.binder.get_runoff(
+                data=data["glacier_data"], name=self.glacier_name
+            )
         return data

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dtcgweb"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
     { name = "DTCG Contributors", email = "" },
 ]
@@ -95,7 +95,7 @@ dev = [
     "flake8 >= 6.0",
     "black >= 23.1",
     "isort",
-    "dtcg @ https://github.com/DTC-Glaciers/dtcg@develop",
+    #"dtcg @ git+https://github.com/DTC-Glaciers/dtcg@develop",
 ]
 
 [project.urls]

@@ -24,7 +24,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from panel.io.fastapi import add_application
 
-from dtcgweb.ui.interface.apps.pn_runoff import get_runoff_dashboard
+from dtcgweb.ui.interface.apps.pn_cryosat import get_cryosat_dashboard
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -91,4 +91,4 @@ async def read_root(request: Request):
 )
 def get_dashboard():
     """Get the main dashboard"""
-    return get_runoff_dashboard()
+    return get_cryosat_dashboard()

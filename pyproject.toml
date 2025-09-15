@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dtcgweb"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
     { name = "DTCG Contributors", email = "" },
 ]
 description = "DTCG dashboards for web."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 keywords = [
@@ -23,10 +23,8 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Environment :: Web Environment",
     "Framework :: FastAPI",
     "Intended Audience :: Science/Research",
@@ -114,7 +112,7 @@ dev = [
 # dtcg-run = "main:main"
 
 [tool.hatch.build.targets.sdist]
-packages = ["src/dtcgweb"]
+packages = ["dtcgweb"]
 exclude = [
     "logs",
     "*.png",

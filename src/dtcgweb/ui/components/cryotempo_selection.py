@@ -18,12 +18,13 @@ Copyright 2025 DTCG Contributors
 Panel wrapper displaying runoff for specific glaciers.
 """
 
+from pathlib import Path
+
 import dtcg.integration.oggm_bindings as oggm_bindings
 import dtcg.interface.plotting as dtcg_plotting
 import holoviews as hv
 import panel as pn
 import param
-
 
 pn.extension(design="material", sizing_mode="stretch_width")
 pn.extension(loading_spinner="dots", loading_color="#00aa41", template="material")
@@ -90,6 +91,7 @@ class CryotempoComparison(param.Parameterized):
         self.binder = oggm_bindings.BindingsCryotempo()
         if not self.cached_data:
             self.binder.init_oggm(dirname="test")
+        self.cache_path = Path("./static/data/l2_precompute").resolve()
         self.artist = dtcg_plotting.HoloviewsDashboardL2()
         self.data = None
         self.plot = pn.pane.HoloViews(self.figure, sizing_mode="scale_both")
@@ -139,7 +141,7 @@ class CryotempoComparison(param.Parameterized):
             )
         else:
             metadata["glacier_names"] = self.binder.get_cached_metadata(
-                cache="./static/data/l2_precompute/", index=""
+                cache=self.cache_path, index=""
             )
             glacier_hash = {}
             for k, v in metadata["glacier_names"].items():
@@ -171,9 +173,7 @@ class CryotempoComparison(param.Parameterized):
     @param.depends("glacier_name", "rgi_id")
     def set_rgi_id(self):
 
-        print(self.glacier_name)
         self.rgi_id = self.metadata["lookup"].get(self.glacier_name, "RGI60-06.00377")
-        print(self.rgi_id)
         return self.rgi_id
 
     @param.depends(
@@ -216,7 +216,7 @@ class CryotempoComparison(param.Parameterized):
         pn.io.loading.start_loading_spinner(self.plot)
 
         gdir, smb, runoff_data = self.binder.get_cached_data(
-            rgi_id=self.rgi_id, cache="./static/data/l2_precompute/"
+            rgi_id=self.rgi_id, cache=self.cache_path
         )
         run_name = f"{self.oggm_model}_Hugonnet_2000-01-01_2020-01-01"
 

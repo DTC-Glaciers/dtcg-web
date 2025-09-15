@@ -38,10 +38,11 @@ classifiers = [
 dependencies = [
     "fastapi[standard]",
     "panel[fastapi]",
-    "dtcg @ git+https://github.com/DTC-Glaciers/dtcg@main",
+    "dtcg @ git+https://github.com/DTC-Glaciers/dtcg@feat-l2-dashboard",
     "oggm @ git+https://github.com/gampnico/oggm@feat-dtcg",
     "param",
     "bokeh",
+    "bokeh-fastapi",
     "holoviews",
     "geopandas",
 ]
@@ -113,7 +114,7 @@ dev = [
 # dtcg-run = "main:main"
 
 [tool.hatch.build.targets.sdist]
-packages = ["dtcgweb"]
+packages = ["src/dtcgweb"]
 exclude = [
     "logs",
     "*.png",

@@ -53,20 +53,20 @@ def get_cryosat_dashboard():
     # load region/subregion names dynamically from data
 
     groups = {}
-    for k,v in rs.metadata["glacier_names"].items():
-        groups[k] = [j["Name"] for i,j in v.items()]
+    for k, v in rs.metadata["glacier_names"].items():
+        groups[k] = [j["Name"] for i, j in v.items()]
         # groups[k] = {j["Name"]:i for i,j in v.items()}
-    
+
     dropdown_glacier = {
         "widget_type": pn.widgets.Select,
-        "groups":  groups,
+        "groups": groups,
     }
 
     sidebar = [
         pn.Param(
             rs.param,
+            name="",
             widgets={
-                # "region_name": dropdown_region,
                 "glacier_name": dropdown_glacier,
             },
         ),
@@ -74,10 +74,11 @@ def get_cryosat_dashboard():
 
     dashboard_content = [rs.plot]  # this is the dashboard content
     panel = pn.template.MaterialTemplate(
-        site="DTEC Glaciers",
         title="L2 Dashboard Prototype",
         # busy_indicator=indicator_loading,
         sidebar=sidebar,
+        logo="./static/img/dtc_logo_inv_min.png",
         main=dashboard_content,
-    )  # .servable()
+        sidebar_width=250,
+    )
     return panel

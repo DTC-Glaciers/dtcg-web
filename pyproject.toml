@@ -112,7 +112,7 @@ dev = [
 # dtcg-run = "main:main"
 
 [tool.hatch.build.targets.sdist]
-packages = ["dtcgweb"]
+packages = ["src/dtcgweb"]
 exclude = [
     "logs",
     "*.png",
@@ -125,7 +125,7 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["dtcgweb"]
+packages = ["src/dtcgweb"]
 
 [tool.hatch.metadata]
 allow-direct-references = true

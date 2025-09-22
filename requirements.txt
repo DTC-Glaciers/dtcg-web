@@ -11,3 +11,4 @@ geopandas
 pytest
 numpy
 matplotlib
+dtcgweb @ git+https://github.com/DTC-Glaciers/dtcg-web@fix-bokeh-dockerfile

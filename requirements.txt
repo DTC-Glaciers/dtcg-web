@@ -2,7 +2,7 @@
 # If not, use requirements.yml or pyproject.toml
 fastapi[standard]
 panel[fastapi]
-dtcgweb @ git+https://github.com/DTC-Glaciers/dtcg-web@feat-l2-dashboard
+dtcgweb @ git+https://github.com/DTC-Glaciers/dtcg-web@v0.1.2
 dtcg @ git+https://github.com/DTC-Glaciers/dtcg@feat-l2-dashboard
 oggm @ git+https://github.com/gampnico/oggm@feat-dtcg
 param

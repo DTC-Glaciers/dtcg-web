@@ -35,6 +35,7 @@ BASE_DIR = Path(__file__).resolve().parent
 # app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
 templates = Jinja2Templates(directory=f"{BASE_DIR/'templates'}")
 hostname = "127.0.0.1"
+port = 8080
 
 """Middleware
 
@@ -89,7 +90,11 @@ async def read_root(request: Request):
     # address=hostname,
     # port=8000,
     # show=False,
-    # allow_websocket_origin=[f"{hostname}:8000", "localhost:8000"],
+    allow_websocket_origin=[
+        f"{hostname}:{port}",
+        f"localhost:{port}",
+        f"0.0.0.0:{port}",
+    ],
 )
 def get_dashboard():
     """Get the main dashboard"""

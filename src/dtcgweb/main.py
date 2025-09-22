@@ -88,13 +88,13 @@ async def read_root(request: Request):
     app=app,
     title="DTCG Dashboard",
     # address=hostname,
-    # port=8000,
+    # port=f"{port}",
     # show=False,
-    allow_websocket_origin=[
-        f"{hostname}:{port}",
-        f"localhost:{port}",
-        f"0.0.0.0:{port}",
-    ],
+    # allow_websocket_origin=[
+    #     f"{hostname}:{port}",
+    #     f"localhost:{port}",
+    #     f"0.0.0.0:{port}",
+    # ],
 )
 def get_dashboard():
     """Get the main dashboard"""

@@ -14,4 +14,4 @@ COPY ./src/dtcgweb/static/ /code/static/
 RUN pip install --no-cache-dir --upgrade -e .[oggm]
 
 
-CMD ["fastapi", "run", "dtcgweb/main.py", "--proxy-headers", "--port", "8080"]
+CMD ["fastapi", "run", "dtcgweb/main.py", "--proxy-headers", "--port", "8080" "--forwarded-allow-ips "localhost,0.0.0.0,127.0.0.1"]

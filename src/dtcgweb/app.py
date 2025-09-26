@@ -116,4 +116,4 @@ async def read_root(request: Request):
 )
 def get_dashboard():
     """Get the main dashboard"""
-    return get_cryosat_dashboard()
+    return get_cryosat_dashboard().servable()

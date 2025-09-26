@@ -18,6 +18,7 @@ Copyright 2025 DTCG Contributors
 DTCG web interface.
 """
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -34,7 +35,7 @@ app = FastAPI()
 BASE_DIR = Path(__file__).resolve().parent
 # app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
 templates = Jinja2Templates(directory=f"{BASE_DIR/'templates'}")
-hostname = "127.0.0.1"
+hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
 port = 8080
 
 """Middleware
@@ -43,7 +44,14 @@ TODO: sanitise user shapefiles
 TODO: HTTPSRedirectMiddleware
 """
 app.add_middleware(  # TODO: Bremen cluster support
-    TrustedHostMiddleware, allowed_hosts=[hostname, "localhost", "dtcg.github.io"]
+    TrustedHostMiddleware,
+    allowed_hosts=[
+        hostname,
+        "localhost",
+        "dtcg.github.io",
+        "bokeh.oggm.org",
+        "bokeh.oggm.org/dtcg_l2_dashboard",
+    ],
 )
 
 # app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -80,11 +88,21 @@ async def read_root(request: Request):
     This just redirects to the dashboard, but can be extended if
     multiple apps are implemented.
     """
-    return RedirectResponse(url="/app")
+    return RedirectResponse(url="/dtcg_l2_dashboard/app")
+
+
+@app.get("/app")
+async def read_root(request: Request):
+    """Get homepage.
+
+    This just redirects to the dashboard, but can be extended if
+    multiple apps are implemented.
+    """
+    return RedirectResponse(url="/dtcg_l2_dashboard/app")
 
 
 @add_application(
-    "/app",
+    "/dtcg_l2_dasboard/app",
     app=app,
     title="DTCG Dashboard",
     # address=hostname,

@@ -30,7 +30,7 @@ from panel.io.fastapi import add_application
 
 from dtcgweb.ui.interface.apps.pn_cryosat import get_cryosat_dashboard
 
-app = FastAPI()
+app = FastAPI(root_path="/dtcgweb")
 
 BASE_DIR = Path(__file__).resolve().parent
 # app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
@@ -53,9 +53,6 @@ app.add_middleware(  # TODO: Bremen cluster support
         "bokeh.oggm.org/dtcg_l2_dashboard",
     ],
 )
-
-# app.mount("/static", StaticFiles(directory="static"), name="static")
-
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
@@ -88,21 +85,10 @@ async def read_root(request: Request):
     This just redirects to the dashboard, but can be extended if
     multiple apps are implemented.
     """
-    return RedirectResponse(url="/dtcg_l2_dashboard/app")
-
-
-@app.get("/app")
-async def read_root(request: Request):
-    """Get homepage.
-
-    This just redirects to the dashboard, but can be extended if
-    multiple apps are implemented.
-    """
-    return RedirectResponse(url="/dtcg_l2_dashboard/app")
-
+    return RedirectResponse(url=f"{app.root_path}/app")
 
 @add_application(
-    "/dtcg_l2_dasboard/app",
+    "/app",
     app=app,
     title="DTCG Dashboard",
     # address=hostname,
@@ -116,4 +102,4 @@ async def read_root(request: Request):
 )
 def get_dashboard():
     """Get the main dashboard"""
-    return get_cryosat_dashboard().servable()
+    return get_cryosat_dashboard()

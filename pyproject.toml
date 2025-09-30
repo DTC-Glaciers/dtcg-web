@@ -36,7 +36,7 @@ classifiers = [
 dependencies = [
     "fastapi[standard]",
     "panel[fastapi]",
-    "dtcg @ git+https://github.com/DTC-Glaciers/dtcg@feat-l2-dashboard",
+    "dtcg @ git+https://github.com/DTC-Glaciers/dtcg@v0.2.0",
     "oggm @ git+https://github.com/gampnico/oggm@feat-dtcg",
     "param",
     "bokeh",
@@ -94,7 +94,6 @@ dev = [
     "flake8 >= 6.0",
     "black >= 23.1",
     "isort",
-    #"dtcg @ git+https://github.com/DTC-Glaciers/dtcg@develop",
 ]
 
 [project.urls]

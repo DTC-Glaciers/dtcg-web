@@ -50,15 +50,28 @@ app.add_middleware(  # TODO: Bremen cluster support
         "localhost",
         "dtcg.github.io",
         "bokeh.oggm.org",
-        "bokeh.oggm.org/dtcg_l2_dashboard",
+        "bokeh.oggm.org/dtcgweb",
     ],
 )
+
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     file_name = "favicon.ico"
     file_path = Path(app.root_path)
     file_path = file_path / "static" / file_name
+
+    return FileResponse(
+        path=file_path,
+        headers={"Content-Disposition": "attachment; filename=" + file_name},
+    )
+
+
+@app.get("/static/assets/css/404style.css", include_in_schema=False)
+async def css_404():
+    file_name = "404style.css"
+    file_path = Path(app.root_path)
+    file_path = file_path / "static/assets/css" / file_name
 
     return FileResponse(
         path=file_path,
@@ -86,6 +99,7 @@ async def read_root(request: Request):
     multiple apps are implemented.
     """
     return RedirectResponse(url=f"{app.root_path}/app")
+
 
 @add_application(
     "/app",

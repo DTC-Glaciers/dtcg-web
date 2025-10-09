@@ -55,9 +55,7 @@ app.add_middleware(  # TODO: Bremen cluster support
 )
 
 
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    file_name = "favicon.ico"
+def get_static_file(file_name: str):
     file_path = Path(app.root_path)
     file_path = file_path / "static" / file_name
 
@@ -67,16 +65,19 @@ async def favicon():
     )
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return get_static_file("favicon.ico")
+
+
 @app.get("/static/assets/css/404style.css", include_in_schema=False)
 async def css_404():
-    file_name = "404style.css"
-    file_path = Path(app.root_path)
-    file_path = file_path / "static/assets/css" / file_name
+    return get_static_file("assets/css/404style.css")
 
-    return FileResponse(
-        path=file_path,
-        headers={"Content-Disposition": "attachment; filename=" + file_name},
-    )
+
+@app.get("/logo.png", include_in_schema=False)
+async def get_logo():
+    return get_static_file("img/dtc_logo.png")
 
 
 """Error handling"""

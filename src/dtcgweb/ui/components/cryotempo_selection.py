@@ -143,6 +143,7 @@ class CryotempoComparison(param.Parameterized):
             metadata["glacier_names"] = self.binder.get_cached_metadata(
                 cache=self.cache_path, index=""
             )
+            metadata["glacier_names"] = dict(sorted(metadata["glacier_names"].items()))
             glacier_hash = {}
             for k, v in metadata["glacier_names"].items():
                 glacier_hash.update({j["Name"]: i for i, j in v.items()})
@@ -215,16 +216,16 @@ class CryotempoComparison(param.Parameterized):
         self.rgi_id = self.set_rgi_id()
         pn.io.loading.start_loading_spinner(self.plot)
 
-        gdir, smb, runoff_data = self.binder.get_cached_data(
+        cached_data = self.binder.get_cached_data(
             rgi_id=self.rgi_id, cache=self.cache_path
         )
         run_name = f"{self.oggm_model}_Hugonnet_2000-01-01_2020-01-01"
 
         self.data = {
-            "gdir": gdir,
-            "datacube": None,
-            "smb": smb,
-            "runoff_data": runoff_data,
+            "gdir": cached_data.get("gdir", None),
+            "datacube": cached_data.get("eolis", None),
+            "smb": cached_data.get("smb", None),
+            "runoff_data": cached_data.get("runoff_data", None),
         }
         pn.io.loading.stop_loading_spinner(self.plot)
 
@@ -428,6 +429,7 @@ class CryotempoSelection(param.Parameterized):
             metadata["glacier_names"] = self.binder.get_cached_metadata(
                 cache=self.cache_path, index=""
             )
+            metadata["glacier_names"] = dict(sorted(metadata["glacier_names"].items()))
             glacier_hash = {}
             for k, v in metadata["glacier_names"].items():
                 glacier_hash.update({j["Name"]: i for i, j in v.items()})
@@ -447,13 +449,19 @@ class CryotempoSelection(param.Parameterized):
     def set_plot(self):
         """Set component graphics."""
         if self.data is not None:
+            
             self.rgi_id = self.set_rgi_id()
-
+            print(self.rgi_id)
+            print("updating plot")
             self.figure = self.plot_dashboard(
                 data=self.data,
                 glacier_name=self.glacier_name,
             )
+            # self.plot.object = self.figure
             self.plot = self.figure
+            # self.plot.object = hv.Layout(self.figure)
+            self.plot.layout = hv.Layout(self.figure)
+            # self.plot = self.figure
 
     @param.depends("glacier_name", "rgi_id")
     def set_rgi_id(self):
@@ -500,16 +508,16 @@ class CryotempoSelection(param.Parameterized):
         self.rgi_id = self.set_rgi_id()
         pn.io.loading.start_loading_spinner(self.plot)
 
-        gdir, smb, runoff_data = self.binder.get_cached_data(
+        cached_data = self.binder.get_cached_data(
             rgi_id=self.rgi_id, cache=self.cache_path
         )
         run_name = f"{self.oggm_model}_Hugonnet_2000-01-01_2020-01-01"
 
         self.data = {
-            "gdir": gdir,
-            "datacube": None,
-            "smb": smb,
-            "runoff_data": runoff_data,
+            "gdir": cached_data.get("gdir", None),
+            "datacube": cached_data.get("eolis", None),
+            "smb": cached_data.get("smb", None),
+            "runoff_data": cached_data.get("runoff", None),
         }
         pn.io.loading.stop_loading_spinner(self.plot)
 
@@ -534,6 +542,15 @@ class CryotempoSelection(param.Parameterized):
         datacube = None
         return gdir, datacube
 
+    # @param.depends(
+    #     "year",
+    #     "debug",
+    #     "region_name",
+    #     "glacier_name",
+    #     "rgi_id",
+    #     "oggm_model",
+    #     watch=True,
+    # )
     def plot_dashboard(
         self,
         data,
@@ -577,27 +594,15 @@ class CryotempoSelection(param.Parameterized):
         fig_daily_mb = self.plot_cryo.plot_mb_comparison(
             smb=smb,
             ref_year=self.year,
-            datacube=datacube,
+            datacube=None,
             gdir=gdir,
             cumulative=False,
         )
         fig_cumulative_mb = self.plot_cryo.plot_mb_comparison(
             smb=smb,
             ref_year=self.year,
-            datacube=datacube,
+            datacube=None,
             gdir=gdir,
-            cumulative=True,
-        )
-        fig_elevation = self.plot_cryo.plot_synthetic_data(
-            title="EO Elevation",
-            label="Elevation [m]",
-            ref_year=self.year,
-            cumulative=False,
-        )
-        fig_cumulative_elevation = self.plot_cryo.plot_synthetic_data(
-            title="EO Elevation",
-            label="Elevation [m]",
-            ref_year=self.year,
             cumulative=True,
         )
         figures = [
@@ -606,16 +611,29 @@ class CryotempoSelection(param.Parameterized):
             fig_monthly_runoff,
             fig_runoff_cumulative,
         ]
+        
+        if datacube is not None:
+            fig_eo_elevation = self.plot_cryo.plot_eolis_timeseries(
+                datacube=datacube,
+                mass_balance=False,
+            )
+            fig_eo_smb = self.plot_cryo.plot_eolis_timeseries(
+                datacube=datacube,
+                mass_balance=True,
+                glacier_area = gdir.get("rgi_area_km2", None)
+            )
+        
+        
+        # eo_tab = pn.Tabs(("Model", fig_cumulative_mb), ("EO", fig_elevation), dynamic=True)
+            eo_tab = pn.Tabs(
+                ("Model", hv.Layout([fig_daily_mb + fig_cumulative_mb])),
+                ("EO", hv.Layout([fig_eo_smb + fig_eo_elevation]).opts(shared_axes=False)),
+                dynamic=True,
+            )
+            figures = pn.Column(eo_tab, pn.Row(fig_monthly_runoff, fig_runoff_cumulative))
         self.figures = figures
         if glacier_name:
             self.artist.set_dashboard_title(name=self.glacier_name)
-        # eo_tab = pn.Tabs(("Model", fig_cumulative_mb), ("EO", fig_elevation), dynamic=True)
-        eo_tab = pn.Tabs(
-            ("Model", hv.Layout([fig_daily_mb + fig_cumulative_mb])),
-            ("EO", hv.Layout([fig_elevation + fig_cumulative_elevation])),
-            dynamic=True,
-        )
-        figures = pn.Column(eo_tab, pn.Row(fig_monthly_runoff, fig_runoff_cumulative))
-
         dashboard = self.artist.set_dashboard(figures=figures)
         return self.artist.dashboard
+

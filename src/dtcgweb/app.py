@@ -28,15 +28,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from panel.io.fastapi import add_application
 
-from dtcgweb.ui.interface.apps.pn_cryosat import get_cryosat_dashboard
+from dtcgweb.ui.interface.apps.pn_eolis import get_eolis_dashboard
 
+hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
+port = 8080
 app = FastAPI(root_path="/dtcgweb")
 
 BASE_DIR = Path(__file__).resolve().parent
 # app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
 templates = Jinja2Templates(directory=f"{BASE_DIR/'templates'}")
-hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
-port = 8080
+
 
 """Middleware
 
@@ -50,13 +51,21 @@ app.add_middleware(  # TODO: Bremen cluster support
         "localhost",
         "dtcg.github.io",
         "bokeh.oggm.org",
-        "bokeh.oggm.org/dtcg_l2_dashboard",
+        "bokeh.oggm.org/dtcgweb",
     ],
 )
 
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    file_name = "favicon.ico"
+def set_network_ports():
+    hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
+    if hostname != "127.0.0.1":
+        port = 8080
+        app = FastAPI(root_path="/dtcgweb")
+    else:
+        port = 8000
+        app = FastAPI()
+    return app, hostname, port
+
+def get_static_file(file_name: str):
     file_path = Path(app.root_path)
     file_path = file_path / "static" / file_name
 
@@ -64,6 +73,21 @@ async def favicon():
         path=file_path,
         headers={"Content-Disposition": "attachment; filename=" + file_name},
     )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return get_static_file("favicon.ico")
+
+
+@app.get("/static/assets/css/404style.css", include_in_schema=False)
+async def css_404():
+    return get_static_file("assets/css/404style.css")
+
+
+@app.get("/logo.png", include_in_schema=False)
+async def get_logo():
+    return get_static_file("img/dtc_logo.png")
 
 
 """Error handling"""
@@ -87,6 +111,7 @@ async def read_root(request: Request):
     """
     return RedirectResponse(url=f"{app.root_path}/app")
 
+
 @add_application(
     "/app",
     app=app,
@@ -102,4 +127,4 @@ async def read_root(request: Request):
 )
 def get_dashboard():
     """Get the main dashboard"""
-    return get_cryosat_dashboard()
+    return get_eolis_dashboard()

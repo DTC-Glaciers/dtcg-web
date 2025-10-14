@@ -1,10 +1,32 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <title>Error</title>
-    </head>
-    <body>
-        404 not found
-        {{ request|safe }}
-    </body>
+<html lang="en" dir="ltr">
+
+<head>
+    <meta charset="utf-8">
+    <title>404 Not Found</title>
+</head>
+
+<body>
+    <!-- 404 not found -->
+    <link rel="stylesheet" href="/static/assets/css/404style.css">
+    <div class="logo-area">
+        <img src="/logo.png" alt="DTC Glaciers">
+        <!-- <div id="floated">
+            <p>DTC</p>Glaciers
+        </div> -->
+    </div>
+    <section class="error-container">
+        <span class="four"><span class="screen-reader-text">4</span></span>
+        <span class="zero"><span class="screen-reader-text">0</span></span>
+        <span class="four"><span class="screen-reader-text">4</span></span>
+    </section>
+    <h1>Page not found!</h1>
+    <p class="zoom-area">Maybe try a different link?</p>
+    <div class="link-container">
+        <a href="/" class="more-link">To the homepage</a>
+    </div>
+
+    {{ request|safe }}
+</body>
+
 </html>

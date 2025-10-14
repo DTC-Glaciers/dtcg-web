@@ -33,17 +33,6 @@ def get_eolis_dashboard():
     """
     rs = CryotempoSelection()
 
-    # Indicators are also set by the template.
-    # indicator_loading = pn.indicators.LoadingSpinner(
-    #     value=False, size=20, color="warning"
-    # )
-    # indicator_bar = pn.indicators.Progress(active=False, width=200)
-
-    # # interface
-    # button = pn.widgets.Button(
-    #     name="Update", button_type="primary", sizing_mode="stretch_width"
-    # )
-
     """Widgets
     
     Note that some buttons are already declared in RegionSelection.
@@ -54,15 +43,12 @@ def get_eolis_dashboard():
 
     groups = {}
     for k, v in rs.metadata["glacier_names"].items():
-        # v = dict(sorted(v.items()))
-        groups[k] = [j["Name"] for i, j in v.items()]
-        
+        groups[k] = sorted([j["Name"] for i, j in v.items()])
         # groups[k] = {j["Name"]:i for i,j in v.items()}
 
     dropdown_glacier = {
         "widget_type": pn.widgets.Select,
         "groups": groups,
-        
     }
 
     sidebar = [

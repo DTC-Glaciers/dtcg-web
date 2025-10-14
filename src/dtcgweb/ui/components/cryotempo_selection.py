@@ -377,10 +377,9 @@ class CryotempoSelection(param.Parameterized):
         if not self.cached_data:
             self.binder.init_oggm(dirname="test")
         self.cache_path = Path("./static/data/l2_precompute").resolve()
-        self.artist = dtcg_plotting.HoloviewsDashboardL2()
+        self.artist = dtcg_plotting.HoloviewsDashboardL1()
         self.data = None
-        # self.plot = pn.pane.HoloViews(self.figure, sizing_mode="scale_both")
-        self.plot = pn.pane.HoloViews(self.figure)
+        self.plot = pn.FlexBox()
         self.metadata = self.get_metadata()
         # if self.glacier_name:
         self.rgi_id = self.set_rgi_id()
@@ -449,24 +448,19 @@ class CryotempoSelection(param.Parameterized):
     def set_plot(self):
         """Set component graphics."""
         if self.data is not None:
-            
             self.rgi_id = self.set_rgi_id()
-            print(self.rgi_id)
-            print("updating plot")
             self.figure = self.plot_dashboard(
                 data=self.data,
                 glacier_name=self.glacier_name,
             )
-            # self.plot.object = self.figure
-            self.plot = self.figure
-            # self.plot.object = hv.Layout(self.figure)
-            self.plot.layout = hv.Layout(self.figure)
-            # self.plot = self.figure
+
+            self.plot.objects = [i for i in self.figures]
 
     @param.depends("glacier_name", "rgi_id")
     def set_rgi_id(self):
 
-        self.rgi_id = self.metadata["lookup"].get(self.glacier_name, "RGI60-06.00377")
+        default_glacier = "RGI60-11.00897"  # Hef because it appears first
+        self.rgi_id = self.metadata["lookup"].get(self.glacier_name, default_glacier)
         return self.rgi_id
 
     @param.depends(
@@ -503,7 +497,7 @@ class CryotempoSelection(param.Parameterized):
         watch=True,
     )
     def get_dashboard_data_cached(self) -> dict:
-        """Get data from OGGM."""
+        """Get data from precomputed cache."""
 
         self.rgi_id = self.set_rgi_id()
         pn.io.loading.start_loading_spinner(self.plot)
@@ -542,15 +536,6 @@ class CryotempoSelection(param.Parameterized):
         datacube = None
         return gdir, datacube
 
-    # @param.depends(
-    #     "year",
-    #     "debug",
-    #     "region_name",
-    #     "glacier_name",
-    #     "rgi_id",
-    #     "oggm_model",
-    #     watch=True,
-    # )
     def plot_dashboard(
         self,
         data,
@@ -611,29 +596,51 @@ class CryotempoSelection(param.Parameterized):
             fig_monthly_runoff,
             fig_runoff_cumulative,
         ]
-        
+
         if datacube is not None:
             fig_eo_elevation = self.plot_cryo.plot_eolis_timeseries(
                 datacube=datacube,
                 mass_balance=False,
-            )
+            ).opts(title="Elevation Change (CryoSat)")
+
             fig_eo_smb = self.plot_cryo.plot_eolis_timeseries(
                 datacube=datacube,
                 mass_balance=True,
-                glacier_area = gdir.get("rgi_area_km2", None)
-            )
-        
-        
-        # eo_tab = pn.Tabs(("Model", fig_cumulative_mb), ("EO", fig_elevation), dynamic=True)
-            eo_tab = pn.Tabs(
-                ("Model", hv.Layout([fig_daily_mb + fig_cumulative_mb])),
-                ("EO", hv.Layout([fig_eo_smb + fig_eo_elevation]).opts(shared_axes=False)),
-                dynamic=True,
-            )
-            figures = pn.Column(eo_tab, pn.Row(fig_monthly_runoff, fig_runoff_cumulative))
+                glacier_area=gdir.get("rgi_area_km2", None),
+            ).opts(title="Specific Mass Balance (CryoSat)")
+            figures = [
+                hv.Layout(
+                    fig_daily_mb.opts(title=f"Specific Mass Balance (OGGM)")
+                    + fig_eo_smb
+                ).opts(tabs=True),
+                hv.Layout(
+                    fig_cumulative_mb.opts(
+                        title=f"Cumulative Specific Mass Balance (OGGM)"
+                    )
+                    + fig_eo_elevation
+                ).opts(tabs=True),
+                fig_monthly_runoff,
+                fig_runoff_cumulative,
+            ]
         self.figures = figures
+
         if glacier_name:
             self.artist.set_dashboard_title(name=self.glacier_name)
-        dashboard = self.artist.set_dashboard(figures=figures)
-        return self.artist.dashboard
 
+        self.artist.dashboard = pn.Column(
+            hv.Layout(figures[:2]).opts(
+                shared_axes=False,
+                title=self.artist.title,
+                fontsize={"title": 18},
+                sizing_mode="scale_both",
+                merge_tools=False,
+                tabs=True,
+            ),
+            pn.Row(
+                hv.Layout(figures[2:]).opts(
+                    shared_axes=False, sizing_mode="scale_both", merge_tools=False
+                )
+            ),
+        )
+
+        return self.artist.dashboard

@@ -28,16 +28,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from panel.io.fastapi import add_application
 
-from dtcgweb.ui.interface.apps.pn_cryosat import get_cryosat_dashboard
 from dtcgweb.ui.interface.apps.pn_eolis import get_eolis_dashboard
 
 hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
-if hostname != "127.0.0.1":
-    port = 8080
-    app = FastAPI(root_path="/dtcgweb")
-else:
-    port = 8000
-    app = FastAPI()
+port = 8080
+app = FastAPI(root_path="/dtcgweb")
 
 BASE_DIR = Path(__file__).resolve().parent
 # app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
@@ -60,6 +55,15 @@ app.add_middleware(  # TODO: Bremen cluster support
     ],
 )
 
+def set_network_ports():
+    hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
+    if hostname != "127.0.0.1":
+        port = 8080
+        app = FastAPI(root_path="/dtcgweb")
+    else:
+        port = 8000
+        app = FastAPI()
+    return app, hostname, port
 
 def get_static_file(file_name: str):
     file_path = Path(app.root_path)
@@ -120,16 +124,6 @@ async def read_root(request: Request):
     #     f"localhost:{port}",
     #     f"0.0.0.0:{port}",
     # ],
-)
-def get_dashboard():
-    """Get the main dashboard"""
-    return get_cryosat_dashboard()
-
-
-@add_application(
-    "/app/eolis",
-    app=app,
-    title="DTCG Dashboard",
 )
 def get_dashboard():
     """Get the main dashboard"""

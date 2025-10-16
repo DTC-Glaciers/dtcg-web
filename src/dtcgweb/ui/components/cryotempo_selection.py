@@ -380,6 +380,7 @@ class CryotempoSelection(param.Parameterized):
         self.artist = dtcg_plotting.HoloviewsDashboardL1()
         self.data = None
         self.plot = pn.FlexBox()
+        self.map = pn.FlexBox()
         self.metadata = self.get_metadata()
         # if self.glacier_name:
         self.rgi_id = self.set_rgi_id()
@@ -411,6 +412,7 @@ class CryotempoSelection(param.Parameterized):
         Stores glacier metadata to avoid calling and opening the same
         file multiple times.
         """
+        pn.io.loading.start_loading_spinner(self.plot)
         metadata = {"name": [""], "id": [""], "glacier_names": {}}
         if not self.cached_data:
             metadata["region_names"] = sorted(
@@ -433,7 +435,7 @@ class CryotempoSelection(param.Parameterized):
             for k, v in metadata["glacier_names"].items():
                 glacier_hash.update({j["Name"]: i for i, j in v.items()})
             metadata["lookup"] = glacier_hash
-
+        pn.io.loading.stop_loading_spinner(self.plot)
         return metadata
 
     @param.depends(
@@ -453,7 +455,11 @@ class CryotempoSelection(param.Parameterized):
                 data=self.data,
                 glacier_name=self.glacier_name,
             )
-
+            self.map.objects = [
+                self.plot_selection_map(
+                    data=self.data, glacier_name=self.glacier_name
+                ).opts(max_width=250)
+            ]
             self.plot.objects = [i for i in self.figures]
 
     @param.depends("glacier_name", "rgi_id")
@@ -499,9 +505,8 @@ class CryotempoSelection(param.Parameterized):
     def get_dashboard_data_cached(self) -> dict:
         """Get data from precomputed cache."""
 
-        self.rgi_id = self.set_rgi_id()
         pn.io.loading.start_loading_spinner(self.plot)
-
+        self.rgi_id = self.set_rgi_id()
         cached_data = self.binder.get_cached_data(
             rgi_id=self.rgi_id, cache=self.cache_path
         )
@@ -512,6 +517,7 @@ class CryotempoSelection(param.Parameterized):
             "datacube": cached_data.get("eolis", None),
             "smb": cached_data.get("smb", None),
             "runoff_data": cached_data.get("runoff", None),
+            "outlines": cached_data.get("outlines", None),
         }
         pn.io.loading.stop_loading_spinner(self.plot)
 
@@ -532,9 +538,33 @@ class CryotempoSelection(param.Parameterized):
         print("Checking flowlines...")
         self.binder.set_flowlines(gdir)
         print("Streaming data from Specklia...")
-        # gdir, datacube = self.binder.get_eolis_data(gdir)
-        datacube = None
+        gdir, datacube = self.binder.get_eolis_data(gdir)
         return gdir, datacube
+
+    def plot_selection_map(self, data: dict, glacier_name: str = "") -> hv.Layout:
+        """Plot map showing the selected glacier.
+
+        Parameters
+        ----------
+        data : dict
+            Contains glacier data, shapefile, and optionally runoff
+            data and observations.
+        glacier_name : str, optional
+            Name of glacier in subregion. Default empty string.
+
+        Returns
+        -------
+        hv.Layout
+            Dashboard showing a map of the subregion and runoff data.
+        """
+        self.plot_map = dtcg_plotting.BokehMapOutlines()
+        outlines = data["outlines"].to_crs(4326)
+
+        title = outlines.get("Name", [""])[0]
+        fig_glacier_highlight = self.plot_map.plot_subregion_with_glacier(
+            glacier_outlines=outlines, region_name=title
+        ).opts(xlabel="", ylabel="", xaxis=None, yaxis=None, scalebar=True)
+        return fig_glacier_highlight
 
     def plot_dashboard(
         self,
@@ -554,11 +584,12 @@ class CryotempoSelection(param.Parameterized):
         Returns
         -------
         hv.Layout
-            Dashboard showing a map of the subregion and runoff data.
+            Dashboard showing EO and modelled specific mass balance and
+            runoff.
         """
-
         self.plot_cryo = dtcg_plotting.BokehSynthetic()
         self.plot_graph = dtcg_plotting.BokehGraph()
+        self.plot_map = dtcg_plotting.BokehMapOutlines()
 
         runoff_data = data["runoff_data"]
         gdir = data["gdir"]

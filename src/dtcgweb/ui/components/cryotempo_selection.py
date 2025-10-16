@@ -23,6 +23,7 @@ from pathlib import Path
 import dtcg.integration.oggm_bindings as oggm_bindings
 import dtcg.interface.plotting as dtcg_plotting
 import holoviews as hv
+import geopandas as gpd
 import panel as pn
 import param
 
@@ -85,13 +86,15 @@ class CryotempoComparison(param.Parameterized):
     metadata = param.Dict(default=None)
     debug = param.Integer(default=200, bounds=(0, None))
 
-    def __init__(self, **params):
+    def __init__(
+        self, cache_path: Path = Path("./static/data/l2_precompute").resolve(), **params
+    ):
         super(CryotempoComparison, self).__init__(**params)
         self.figure = hv.Layout()
         self.binder = oggm_bindings.BindingsCryotempo()
         if not self.cached_data:
             self.binder.init_oggm(dirname="test")
-        self.cache_path = Path("./static/data/l2_precompute").resolve()
+        self.cache_path = cache_path
         self.artist = dtcg_plotting.HoloviewsDashboardL2()
         self.data = None
         self.plot = pn.pane.HoloViews(self.figure, sizing_mode="scale_both")
@@ -541,6 +544,33 @@ class CryotempoSelection(param.Parameterized):
         gdir, datacube = self.binder.get_eolis_data(gdir)
         return gdir, datacube
 
+    def get_cached_region_outlines(
+        self,
+        region_id: int,
+        file_name="glacier_outlines.shp",
+    ) -> gpd.GeoDataFrame:
+        """Get subregion domain outlines.
+
+        TODO: Only merge the glacier outlines into a single file if
+        caching middleware exists, as FastAPI doesn't cache by default.
+
+        Parameters
+        ----------
+        region_id : int
+            O1 region ID number.
+        file_name : str
+            Shapefile name.
+        """
+        try:
+            shapefile_path = Path(
+                self.cache_path / f"RGI60-{str(region_id).zfill(2)}/{file_name}"
+            )
+            shapefile = gpd.read_feather(shapefile_path)
+        except FileNotFoundError:
+            return None
+
+        return shapefile
+
     def plot_selection_map(self, data: dict, glacier_name: str = "") -> hv.Layout:
         """Plot map showing the selected glacier.
 
@@ -561,8 +591,10 @@ class CryotempoSelection(param.Parameterized):
         outlines = data["outlines"].to_crs(4326)
 
         title = outlines.get("Name", [""])[0]
-        fig_glacier_highlight = self.plot_map.plot_subregion_with_glacier(
-            glacier_outlines=outlines, region_name=title
+        region_id = int(self.rgi_id[6:8])
+        shapefile = self.get_cached_region_outlines(region_id=region_id)
+        fig_glacier_highlight = self.plot_map.plot_region_with_glacier(
+            shapefile=shapefile, rgi_id=self.rgi_id
         ).opts(xlabel="", ylabel="", xaxis=None, yaxis=None, scalebar=True)
         return fig_glacier_highlight
 

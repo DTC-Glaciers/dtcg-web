@@ -54,9 +54,10 @@ def set_network_ports():
         port = 8080
         app = FastAPI(root_path="/dtcgweb")
     else:
-        port = 8000
+        # port = 8080
         # app = FastAPI()
         # use this until certain 127.0.0.1 is not used in DinD server.
+        port = 8080
         app = FastAPI(root_path="/dtcgweb")
     return app, hostname, port
 

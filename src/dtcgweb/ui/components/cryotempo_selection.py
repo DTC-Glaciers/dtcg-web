@@ -408,6 +408,7 @@ class CryotempoSelection(param.Parameterized):
         ]:
             self.param[p_name].precedence = -1
 
+    @pn.cache
     @param.depends("region_name")
     def get_metadata(self) -> dict:
         """Get glacier metadata.
@@ -451,7 +452,10 @@ class CryotempoSelection(param.Parameterized):
         watch=True,
     )
     def set_plot(self):
-        """Set component graphics."""
+        """Set component graphics.
+
+        This updates the main dashboard content.
+        """
         if self.data is not None:
             self.rgi_id = self.set_rgi_id()
             self.figure = self.plot_dashboard(
@@ -467,6 +471,7 @@ class CryotempoSelection(param.Parameterized):
 
     @param.depends("glacier_name", "rgi_id")
     def set_rgi_id(self):
+        """Set glacier RGI-ID from a glacier name."""
 
         default_glacier = "RGI60-11.00897"  # Hef because it appears first
         self.rgi_id = self.metadata["lookup"].get(self.glacier_name, default_glacier)
@@ -506,7 +511,19 @@ class CryotempoSelection(param.Parameterized):
         watch=True,
     )
     def get_dashboard_data_cached(self) -> dict:
-        """Get data from precomputed cache."""
+        """Get data from precomputed cache.
+
+        This skips all processing steps, and the data is loaded into the
+        same formats as would otherwise be expected when running
+        post-processing.
+
+        Returns
+        -------
+        dict
+            GlacierDirectory parameters as dict, surface mass balance as
+            a np.ndarray, datacubes and runoff data as xr.Datasets,
+            glacier outlines as a gpd.Dataframe.
+        """
 
         pn.io.loading.start_loading_spinner(self.plot)
         self.rgi_id = self.set_rgi_id()
@@ -530,7 +547,8 @@ class CryotempoSelection(param.Parameterized):
         Returns
         -------
         tuple
-            Glacier directory, EOLIS-enhanced gridded data, and specific mass balance.
+            Glacier directory, EOLIS-enhanced gridded data, and
+            specific mass balance.
         """
         self.binder.init_oggm(dirname="test")
         gdir = self.binder.get_glacier_directories(
@@ -544,6 +562,7 @@ class CryotempoSelection(param.Parameterized):
         gdir, datacube = self.binder.get_eolis_data(gdir)
         return gdir, datacube
 
+    @pn.cache
     def get_cached_region_outlines(
         self,
         region_id: int,
@@ -571,6 +590,7 @@ class CryotempoSelection(param.Parameterized):
 
         return shapefile
 
+    @pn.cache
     def plot_selection_map(self, data: dict, glacier_name: str = "") -> hv.Layout:
         """Plot map showing the selected glacier.
 
@@ -598,6 +618,7 @@ class CryotempoSelection(param.Parameterized):
         ).opts(xlabel="", ylabel="", xaxis=None, yaxis=None, scalebar=True)
         return fig_glacier_highlight
 
+    @pn.cache
     def plot_dashboard(
         self,
         data,

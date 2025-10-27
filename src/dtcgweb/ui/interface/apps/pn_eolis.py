@@ -71,3 +71,52 @@ def get_eolis_dashboard():
         sidebar_width=250,
     )
     return panel
+
+def get_eolis_dashboard_with_selection():
+    """Get UI components for the dashboard.
+
+    Returns
+    -------
+    pn.template.MaterialTemplate
+        Dashboard interface.
+    """
+    rs = CryotempoSelection()
+
+    """Widgets
+    
+    Note that some buttons are already declared in RegionSelection.
+    """
+
+    # Dropdown
+    # load region/subregion names dynamically from data
+
+    groups = {}
+    for k, v in rs.metadata["glacier_names"].items():
+        groups[k] = sorted([j["Name"] for i, j in v.items()])
+        # groups[k] = {j["Name"]:i for i,j in v.items()}
+
+    dropdown_glacier = {
+        "widget_type": pn.widgets.Select,
+        "groups": groups,
+    }
+
+    sidebar = [
+        pn.Param(
+            rs.param,
+            name="",
+            widgets={
+                "glacier_name": dropdown_glacier,
+            },
+        ), rs.map
+    ]
+
+    dashboard_content = [rs.plot]  # this is the dashboard content
+    panel = pn.template.MaterialTemplate(
+        title="L2 Dashboard Prototype",
+        # busy_indicator=indicator_loading,
+        sidebar=sidebar,
+        logo="./static/img/dtc_logo_inv_min.png",
+        main=dashboard_content,
+        sidebar_width=250,
+    )
+    return panel

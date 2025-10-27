@@ -618,7 +618,7 @@ class CryotempoSelection(param.Parameterized):
         ).opts(xlabel="", ylabel="", xaxis=None, yaxis=None, scalebar=True)
         return fig_glacier_highlight
 
-    @pn.cache
+    # @pn.cache
     def plot_dashboard(
         self,
         data,
@@ -684,24 +684,27 @@ class CryotempoSelection(param.Parameterized):
         if datacube is not None:
             fig_eo_elevation = self.plot_cryo.plot_eolis_timeseries(
                 datacube=datacube,
-                mass_balance=False,
-            ).opts(title="Elevation Change (CryoSat)")
-
-            fig_eo_smb = self.plot_cryo.plot_eolis_timeseries(
-                datacube=datacube,
                 mass_balance=True,
                 glacier_area=gdir.get("rgi_area_km2", None),
-            ).opts(title="Specific Mass Balance (CryoSat)")
+            ).opts(title="Monthly Cumulative Specific Mass Balance (CryoSat)")
+
+            fig_eo_smb = self.plot_cryo.plot_eolis_smb(
+                datacube=datacube,
+                ref_year=self.year,
+                years=None,
+                cumulative=False,
+                glacier_area=gdir.get("rgi_area_km2", None),
+            ).opts(title="Cumulative Specific Mass Balance (CryoSat)")
             figures = [
                 hv.Layout(
                     fig_daily_mb.opts(title=f"Specific Mass Balance (OGGM)")
-                    + fig_eo_smb
+                    + fig_eo_elevation
                 ).opts(tabs=True),
                 hv.Layout(
                     fig_cumulative_mb.opts(
                         title=f"Cumulative Specific Mass Balance (OGGM)"
                     )
-                    + fig_eo_elevation
+                    + fig_eo_smb
                 ).opts(tabs=True),
                 fig_monthly_runoff,
                 fig_runoff_cumulative,

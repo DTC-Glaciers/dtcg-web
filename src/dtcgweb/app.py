@@ -20,6 +20,7 @@ DTCG web interface.
 
 import os
 from pathlib import Path
+import subprocess
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -28,11 +29,40 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from panel.io.fastapi import add_application
 
-from dtcgweb.ui.interface.apps.pn_eolis import get_eolis_dashboard
+from dtcgweb.ui.interface.apps.pn_eolis import (
+    get_eolis_dashboard,
+    get_eolis_dashboard_with_selection,
+)
 
-hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
-port = 8080
-app = FastAPI(root_path="/dtcgweb")
+
+# hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
+# port = 8080
+# app = FastAPI(root_path="/dtcgweb")
+def set_network_ports():
+    """Set app's port and hostname.
+
+    TODO: find a reliable way to determine if running via
+    Docker-in-Docker.
+
+    Returns
+    -------
+    tuple[FastAPI,str,int]
+        FastAPI app, hostname, and port number.
+    """
+    hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
+    if hostname != "127.0.0.1":
+        port = 8080
+        app = FastAPI(root_path="/dtcgweb")
+    else:
+        # port = 8080
+        # app = FastAPI()
+        # use this until certain 127.0.0.1 is not used in DinD server.
+        port = 8080
+        app = FastAPI(root_path="/dtcgweb")
+    return app, hostname, port
+
+
+app, hostname, port = set_network_ports()
 
 BASE_DIR = Path(__file__).resolve().parent
 # app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
@@ -55,17 +85,15 @@ app.add_middleware(  # TODO: Bremen cluster support
     ],
 )
 
-def set_network_ports():
-    hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
-    if hostname != "127.0.0.1":
-        port = 8080
-        app = FastAPI(root_path="/dtcgweb")
-    else:
-        port = 8000
-        app = FastAPI()
-    return app, hostname, port
 
 def get_static_file(file_name: str):
+    """Handler for returning static files.
+
+    Parameters
+    ----------
+    file_name : str
+        Name of file relative to ``static`` directory.
+    """
     file_path = Path(app.root_path)
     file_path = file_path / "static" / file_name
 
@@ -87,6 +115,7 @@ async def css_404():
 
 @app.get("/logo.png", include_in_schema=False)
 async def get_logo():
+    """Get website logo."""
     return get_static_file("img/dtc_logo.png")
 
 
@@ -127,4 +156,22 @@ async def read_root(request: Request):
 )
 def get_dashboard():
     """Get the main dashboard"""
-    return get_eolis_dashboard()
+    return get_eolis_dashboard_with_selection()
+
+
+# @add_application(
+#     "/app/test",
+#     app=app,
+#     title="DTCG Dashboard",
+#     # address=hostname,
+#     # port=f"{port}",
+#     # show=False,
+#     # allow_websocket_origin=[
+#     #     f"{hostname}:{port}",
+#     #     f"localhost:{port}",
+#     #     f"0.0.0.0:{port}",
+#     # ],
+# )
+# def get_eolis_dashboard():
+#     """Get the test dashboard."""
+#     return get_eolis_dashboard_with_selection()

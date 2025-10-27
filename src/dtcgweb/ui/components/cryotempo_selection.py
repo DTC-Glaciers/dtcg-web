@@ -23,6 +23,7 @@ from pathlib import Path
 import dtcg.integration.oggm_bindings as oggm_bindings
 import dtcg.interface.plotting as dtcg_plotting
 import holoviews as hv
+import geopandas as gpd
 import panel as pn
 import param
 
@@ -85,13 +86,15 @@ class CryotempoComparison(param.Parameterized):
     metadata = param.Dict(default=None)
     debug = param.Integer(default=200, bounds=(0, None))
 
-    def __init__(self, **params):
+    def __init__(
+        self, cache_path: Path = Path("./static/data/l2_precompute").resolve(), **params
+    ):
         super(CryotempoComparison, self).__init__(**params)
         self.figure = hv.Layout()
         self.binder = oggm_bindings.BindingsCryotempo()
         if not self.cached_data:
             self.binder.init_oggm(dirname="test")
-        self.cache_path = Path("./static/data/l2_precompute").resolve()
+        self.cache_path = cache_path
         self.artist = dtcg_plotting.HoloviewsDashboardL2()
         self.data = None
         self.plot = pn.pane.HoloViews(self.figure, sizing_mode="scale_both")
@@ -380,6 +383,7 @@ class CryotempoSelection(param.Parameterized):
         self.artist = dtcg_plotting.HoloviewsDashboardL1()
         self.data = None
         self.plot = pn.FlexBox()
+        self.map = pn.FlexBox()
         self.metadata = self.get_metadata()
         # if self.glacier_name:
         self.rgi_id = self.set_rgi_id()
@@ -404,6 +408,7 @@ class CryotempoSelection(param.Parameterized):
         ]:
             self.param[p_name].precedence = -1
 
+    @pn.cache
     @param.depends("region_name")
     def get_metadata(self) -> dict:
         """Get glacier metadata.
@@ -411,6 +416,7 @@ class CryotempoSelection(param.Parameterized):
         Stores glacier metadata to avoid calling and opening the same
         file multiple times.
         """
+        pn.io.loading.start_loading_spinner(self.plot)
         metadata = {"name": [""], "id": [""], "glacier_names": {}}
         if not self.cached_data:
             metadata["region_names"] = sorted(
@@ -433,7 +439,7 @@ class CryotempoSelection(param.Parameterized):
             for k, v in metadata["glacier_names"].items():
                 glacier_hash.update({j["Name"]: i for i, j in v.items()})
             metadata["lookup"] = glacier_hash
-
+        pn.io.loading.stop_loading_spinner(self.plot)
         return metadata
 
     @param.depends(
@@ -446,18 +452,26 @@ class CryotempoSelection(param.Parameterized):
         watch=True,
     )
     def set_plot(self):
-        """Set component graphics."""
+        """Set component graphics.
+
+        This updates the main dashboard content.
+        """
         if self.data is not None:
             self.rgi_id = self.set_rgi_id()
             self.figure = self.plot_dashboard(
                 data=self.data,
                 glacier_name=self.glacier_name,
             )
-
+            self.map.objects = [
+                self.plot_selection_map(
+                    data=self.data, glacier_name=self.glacier_name
+                ).opts(max_width=250)
+            ]
             self.plot.objects = [i for i in self.figures]
 
     @param.depends("glacier_name", "rgi_id")
     def set_rgi_id(self):
+        """Set glacier RGI-ID from a glacier name."""
 
         default_glacier = "RGI60-11.00897"  # Hef because it appears first
         self.rgi_id = self.metadata["lookup"].get(self.glacier_name, default_glacier)
@@ -497,11 +511,22 @@ class CryotempoSelection(param.Parameterized):
         watch=True,
     )
     def get_dashboard_data_cached(self) -> dict:
-        """Get data from precomputed cache."""
+        """Get data from precomputed cache.
 
-        self.rgi_id = self.set_rgi_id()
+        This skips all processing steps, and the data is loaded into the
+        same formats as would otherwise be expected when running
+        post-processing.
+
+        Returns
+        -------
+        dict
+            GlacierDirectory parameters as dict, surface mass balance as
+            a np.ndarray, datacubes and runoff data as xr.Datasets,
+            glacier outlines as a gpd.Dataframe.
+        """
+
         pn.io.loading.start_loading_spinner(self.plot)
-
+        self.rgi_id = self.set_rgi_id()
         cached_data = self.binder.get_cached_data(
             rgi_id=self.rgi_id, cache=self.cache_path
         )
@@ -512,6 +537,7 @@ class CryotempoSelection(param.Parameterized):
             "datacube": cached_data.get("eolis", None),
             "smb": cached_data.get("smb", None),
             "runoff_data": cached_data.get("runoff", None),
+            "outlines": cached_data.get("outlines", None),
         }
         pn.io.loading.stop_loading_spinner(self.plot)
 
@@ -521,7 +547,8 @@ class CryotempoSelection(param.Parameterized):
         Returns
         -------
         tuple
-            Glacier directory, EOLIS-enhanced gridded data, and specific mass balance.
+            Glacier directory, EOLIS-enhanced gridded data, and
+            specific mass balance.
         """
         self.binder.init_oggm(dirname="test")
         gdir = self.binder.get_glacier_directories(
@@ -532,10 +559,66 @@ class CryotempoSelection(param.Parameterized):
         print("Checking flowlines...")
         self.binder.set_flowlines(gdir)
         print("Streaming data from Specklia...")
-        # gdir, datacube = self.binder.get_eolis_data(gdir)
-        datacube = None
+        gdir, datacube = self.binder.get_eolis_data(gdir)
         return gdir, datacube
 
+    @pn.cache
+    def get_cached_region_outlines(
+        self,
+        region_id: int,
+        file_name="glacier_outlines.shp",
+    ) -> gpd.GeoDataFrame:
+        """Get subregion domain outlines.
+
+        TODO: Only merge the glacier outlines into a single file if
+        caching middleware exists, as FastAPI doesn't cache by default.
+
+        Parameters
+        ----------
+        region_id : int
+            O1 region ID number.
+        file_name : str
+            Shapefile name.
+        """
+        try:
+            shapefile_path = Path(
+                self.cache_path / f"RGI60-{str(region_id).zfill(2)}/{file_name}"
+            )
+            shapefile = gpd.read_feather(shapefile_path)
+        except FileNotFoundError:
+            return None
+
+        return shapefile
+
+    @pn.cache
+    def plot_selection_map(self, data: dict, glacier_name: str = "") -> hv.Layout:
+        """Plot map showing the selected glacier.
+
+        Parameters
+        ----------
+        data : dict
+            Contains glacier data, shapefile, and optionally runoff
+            data and observations.
+        glacier_name : str, optional
+            Name of glacier in subregion. Default empty string.
+
+        Returns
+        -------
+        hv.Layout
+            Dashboard showing a map of the subregion and runoff data.
+        """
+        self.plot_map = dtcg_plotting.BokehMapOutlines()
+        outlines = data["outlines"].to_crs(4326)
+
+        title = outlines.get("Name", [""])[0]
+        region_id = int(self.rgi_id[6:8])
+        shapefile = self.get_cached_region_outlines(region_id=region_id)
+        fig_glacier_highlight = self.plot_map.plot_region_with_glacier(
+            shapefile=shapefile, rgi_id=self.rgi_id
+        ).opts(xlabel="", ylabel="", xaxis=None, yaxis=None, scalebar=True)
+        return fig_glacier_highlight
+
+    # @pn.cache
     def plot_dashboard(
         self,
         data,
@@ -554,11 +637,12 @@ class CryotempoSelection(param.Parameterized):
         Returns
         -------
         hv.Layout
-            Dashboard showing a map of the subregion and runoff data.
+            Dashboard showing EO and modelled specific mass balance and
+            runoff.
         """
-
         self.plot_cryo = dtcg_plotting.BokehSynthetic()
         self.plot_graph = dtcg_plotting.BokehGraph()
+        self.plot_map = dtcg_plotting.BokehMapOutlines()
 
         runoff_data = data["runoff_data"]
         gdir = data["gdir"]
@@ -600,24 +684,27 @@ class CryotempoSelection(param.Parameterized):
         if datacube is not None:
             fig_eo_elevation = self.plot_cryo.plot_eolis_timeseries(
                 datacube=datacube,
-                mass_balance=False,
-            ).opts(title="Elevation Change (CryoSat)")
-
-            fig_eo_smb = self.plot_cryo.plot_eolis_timeseries(
-                datacube=datacube,
                 mass_balance=True,
                 glacier_area=gdir.get("rgi_area_km2", None),
-            ).opts(title="Specific Mass Balance (CryoSat)")
+            ).opts(title="Monthly Cumulative Specific Mass Balance (CryoSat)")
+
+            fig_eo_smb = self.plot_cryo.plot_eolis_smb(
+                datacube=datacube,
+                ref_year=self.year,
+                years=None,
+                cumulative=False,
+                glacier_area=gdir.get("rgi_area_km2", None),
+            ).opts(title="Cumulative Specific Mass Balance (CryoSat)")
             figures = [
                 hv.Layout(
                     fig_daily_mb.opts(title=f"Specific Mass Balance (OGGM)")
-                    + fig_eo_smb
+                    + fig_eo_elevation
                 ).opts(tabs=True),
                 hv.Layout(
                     fig_cumulative_mb.opts(
                         title=f"Cumulative Specific Mass Balance (OGGM)"
                     )
-                    + fig_eo_elevation
+                    + fig_eo_smb
                 ).opts(tabs=True),
                 fig_monthly_runoff,
                 fig_runoff_cumulative,

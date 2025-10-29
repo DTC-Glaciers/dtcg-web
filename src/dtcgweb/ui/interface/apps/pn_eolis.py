@@ -72,6 +72,7 @@ def get_eolis_dashboard():
     )
     return panel
 
+
 def get_eolis_dashboard_with_selection():
     """Get UI components for the dashboard.
 
@@ -107,10 +108,31 @@ def get_eolis_dashboard_with_selection():
             widgets={
                 "glacier_name": dropdown_glacier,
             },
-        ), rs.map
+        ),
+        rs.map,
     ]
 
-    dashboard_content = [rs.plot]  # this is the dashboard content
+    dashboard_content = pn.Column(
+        rs.plot_title,
+        pn.Tabs(
+            ("L1 (OGGM)", rs.plot_l1),
+            ("L2 (Cryosat)", rs.plot_l2),
+            styles={
+                "flex": "0 0 auto",
+                "align-items": "stretch",
+                "align-content": "stretch",
+                "flex-wrap": "nowrap",
+            },
+            # sizing_mode="scale_both"
+        ),
+        styles={
+            "flex": "1 1 auto",
+            "align-items": "stretch",
+            "align-content": "stretch",
+            "flex-wrap": "nowrap",
+        },
+        # sizing_mode="scale_both"
+    )
     panel = pn.template.MaterialTemplate(
         title="L2 Dashboard Prototype",
         # busy_indicator=indicator_loading,
@@ -119,4 +141,5 @@ def get_eolis_dashboard_with_selection():
         main=dashboard_content,
         sidebar_width=250,
     )
+
     return panel

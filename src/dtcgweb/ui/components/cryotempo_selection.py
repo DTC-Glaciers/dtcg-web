@@ -28,296 +28,12 @@ import panel as pn
 import param
 
 pn.extension(design="material", sizing_mode="stretch_width")
-pn.extension(loading_spinner="dots", loading_color="#00aa41", template="material")
+# pn.extension(loading_spinner="dots", loading_color="#00aa41", template="material")
+pn.extension(loading_spinner="arcs")  # , loading_color="#000000", template="material")
 pn.param.ParamMethod.loading_indicator = True
 hv.extension("bokeh")
-
-
-class CryotempoComparison(param.Parameterized):
-    """Panel wrapper around DTCG API.
-
-    All computations should be processed by DTCG backend API, not this
-    frontend. The wrapper binds DTCG API calls to a user interface.
-    UI parameters declared here can be overwritten in the child
-    interface.
-
-    **Do not call functions from ``dtcg`` directly.** Instead:
-        - Use the ``binder`` attribute to interact with OGGM via DTCG.
-        - Use the ``artist`` attribute to plot data via DTCG.
-
-    Attributes
-    ----------
-    year : param.Selector, default 2017
-        Available reference years.
-    figure : hv.Layout
-        Arranges visual components into a single layout.
-    plot : pn.pane.HoloViews
-        Unified panel for all visual components. Only this visual
-        attribute is passed to the client.
-    smb : dict
-        Specific mass balance data.
-    gdir : GlacierDirectory
-        Glacier directory.
-    datacube : xr.Dataset
-        EOLIS-enhanced gridded data.
-    """
-
-    action = param.String(default="select_glacier")
-    region_name = param.Selector(
-        objects=["Central Europe", "Iceland"], default="Iceland"
-    )
-    _glacier_names = param.List(default=[""])
-    glacier_name = param.Selector()
-    year = param.Selector(objects=range(2000, 2020), default=2017)
-    rgi_id = param.Selector()
-    oggm_model = param.Selector(
-        objects={"Daily": "DailyTIModel", "Daily Surface Tracking": "SfcTypeTIModel"},
-        default="DailyTIModel",
-    )
-    use_multiprocessing = param.Boolean(True)
-    cached_data = param.Boolean(True)
-    oggm_params = param.Dict(
-        default={
-            "use_multiprocessing": True,
-            "rgi_version": "62",
-            "store_model_geometry": True,
-        },
-    )
-    metadata = param.Dict(default=None)
-    debug = param.Integer(default=200, bounds=(0, None))
-
-    def __init__(
-        self, cache_path: Path = Path("./static/data/l2_precompute").resolve(), **params
-    ):
-        super(CryotempoComparison, self).__init__(**params)
-        self.figure = hv.Layout()
-        self.binder = oggm_bindings.BindingsCryotempo()
-        if not self.cached_data:
-            self.binder.init_oggm(dirname="test")
-        self.cache_path = cache_path
-        self.artist = dtcg_plotting.HoloviewsDashboardL2()
-        self.data = None
-        self.plot = pn.pane.HoloViews(self.figure, sizing_mode="scale_both")
-        self.metadata = self.get_metadata()
-        # if self.glacier_name:
-        self.rgi_id = self.set_rgi_id()
-        self._hide_params()
-        if not self.cached_data:
-            self.get_dashboard_data()
-        else:
-            self.get_dashboard_data_cached()
-        self.set_plot()
-
-    def _hide_params(self):
-        """Hides parameters from GUI."""
-        for p_name in [
-            "rgi_id",
-            "oggm_params",
-            "action",
-            "_glacier_names",
-            "region_name",
-            "cached_data",
-            "metadata",
-            "debug",
-        ]:
-            self.param[p_name].precedence = -1
-
-    @param.depends("region_name")
-    def get_metadata(self) -> dict:
-        """Get glacier metadata.
-
-        Stores glacier metadata to avoid calling and opening the same
-        file multiple times.
-        """
-        metadata = {"name": [""], "id": [""], "glacier_names": {}}
-        if not self.cached_data:
-            metadata["region_names"] = sorted(
-                [
-                    i["Full_name"]
-                    for i in self.binder.get_rgi_metadata(
-                        "rgi_regions.csv", from_web=True
-                    )
-                ]
-            )
-            metadata["glacier_names"] = self.binder.get_rgi_files_from_subregion(
-                region_name=self.region_name, subregion_name=""
-            )
-        else:
-            metadata["glacier_names"] = self.binder.get_cached_metadata(
-                cache=self.cache_path, index=""
-            )
-            metadata["glacier_names"] = dict(sorted(metadata["glacier_names"].items()))
-            glacier_hash = {}
-            for k, v in metadata["glacier_names"].items():
-                glacier_hash.update({j["Name"]: i for i, j in v.items()})
-            metadata["lookup"] = glacier_hash
-
-        return metadata
-
-    @param.depends(
-        "year",
-        "debug",
-        "region_name",
-        "glacier_name",
-        "rgi_id",
-        "oggm_model",
-        watch=True,
-    )
-    def set_plot(self):
-        """Set component graphics."""
-        if self.data is not None:
-            self.rgi_id = self.set_rgi_id()
-
-            self.figure = self.plot_dashboard(
-                data=self.data,
-                glacier_name=self.glacier_name,
-            )
-            self.plot.object = self.figure
-
-    @param.depends("glacier_name", "rgi_id")
-    def set_rgi_id(self):
-
-        self.rgi_id = self.metadata["lookup"].get(self.glacier_name, "RGI60-06.00377")
-        return self.rgi_id
-
-    @param.depends(
-        "region_name",
-        "glacier_name",
-        "oggm_params",
-        "rgi_id",
-        "oggm_model",
-        watch=False,
-    )
-    def get_dashboard_data(self) -> dict:
-        """Get data from OGGM."""
-        pn.io.loading.start_loading_spinner(self.plot)
-        gdir, datacube = self.get_data([self.rgi_id])
-        print("Calibrating model...")
-        _, _, smb = self.binder.calibrator.run_calibration(
-            gdir=gdir, datacube=datacube, model=self.oggm_model
-        )
-        runoff_data = self.binder.get_aggregate_runoff(gdir=gdir)
-        self.data = {
-            "gdir": gdir,
-            "datacube": datacube,
-            "smb": smb,
-            "runoff_data": runoff_data,
-        }
-        pn.io.loading.stop_loading_spinner(self.plot)
-
-    @param.depends(
-        "region_name",
-        "glacier_name",
-        "oggm_params",
-        "rgi_id",
-        "oggm_model",
-        watch=True,
-    )
-    def get_dashboard_data_cached(self) -> dict:
-        """Get data from OGGM."""
-
-        self.rgi_id = self.set_rgi_id()
-        pn.io.loading.start_loading_spinner(self.plot)
-
-        cached_data = self.binder.get_cached_data(
-            rgi_id=self.rgi_id, cache=self.cache_path
-        )
-        run_name = f"{self.oggm_model}_Hugonnet_2000-01-01_2020-01-01"
-
-        self.data = {
-            "gdir": cached_data.get("gdir", None),
-            "datacube": cached_data.get("eolis", None),
-            "smb": cached_data.get("smb", None),
-            "runoff_data": cached_data.get("runoff_data", None),
-        }
-        pn.io.loading.stop_loading_spinner(self.plot)
-
-    def get_data(self, rgi_ids: list):
-        """Get dashboard data.
-
-        Returns
-        -------
-        tuple
-            Glacier directory, EOLIS-enhanced gridded data, and specific mass balance.
-        """
-        self.binder.init_oggm(dirname="test")
-        gdir = self.binder.get_glacier_directories(
-            rgi_ids=rgi_ids, prepro_level=4, prepro_border=80
-        )[0]
-        print("Fetching OGGM data from shop...")
-        self.binder.get_glacier_data(gdirs=[gdir])
-        print("Checking flowlines...")
-        self.binder.set_flowlines(gdir)
-        print("Streaming data from Specklia...")
-        # gdir, datacube = self.binder.get_eolis_data(gdir)
-        datacube = None
-        return gdir, datacube
-
-    def plot_dashboard(
-        self,
-        data,
-        glacier_name: str = "",
-    ) -> hv.Layout:
-        """Plot a dashboard showing runoff data.
-
-        Parameters
-        ----------
-        data : dict
-            Contains glacier data, shapefile, and optionally runoff
-            data and observations.
-        glacier_name : str, optional
-            Name of glacier in subregion. Default empty string.
-
-        Returns
-        -------
-        hv.Layout
-            Dashboard showing a map of the subregion and runoff data.
-        """
-
-        self.plot_cryo = dtcg_plotting.BokehSynthetic()
-        self.plot_graph = dtcg_plotting.BokehGraph()
-
-        runoff_data = data["runoff_data"]
-        gdir = data["gdir"]
-        datacube = data["datacube"]
-        smb = data["smb"]
-
-        fig_monthly_runoff = self.plot_graph.plot_runoff_timeseries(
-            runoff=runoff_data["monthly_runoff"],
-            ref_year=self.year,
-            year_minimum_runoff=runoff_data["runoff_year_min"],
-            year_maximum_runoff=runoff_data["runoff_year_max"],
-        )
-        fig_runoff_cumulative = self.plot_graph.plot_runoff_timeseries(
-            runoff=runoff_data["monthly_runoff"],
-            ref_year=self.year,
-            cumulative=True,
-        )
-        fig_daily_mb = self.plot_cryo.plot_mb_comparison(
-            smb=smb,
-            ref_year=self.year,
-            datacube=datacube,
-            gdir=gdir,
-            cumulative=False,
-        )
-        fig_cumulative_mb = self.plot_cryo.plot_mb_comparison(
-            smb=smb,
-            ref_year=self.year,
-            datacube=datacube,
-            gdir=gdir,
-            cumulative=True,
-        )
-        figures = [
-            fig_daily_mb,
-            fig_cumulative_mb,
-            fig_monthly_runoff,
-            fig_runoff_cumulative,
-        ]
-        self.figures = figures
-        if glacier_name:
-            self.artist.set_dashboard_title(name=self.glacier_name)
-        dashboard = self.artist.set_dashboard(figures=figures)
-        return self.artist.dashboard
+# pn.config.loading_spinner = 'petal'
+pn.config.loading_color = "black"
 
 
 class CryotempoSelection(param.Parameterized):
@@ -353,6 +69,7 @@ class CryotempoSelection(param.Parameterized):
     region_name = param.Selector(
         objects=["Central Europe", "Iceland"], default="Iceland"
     )
+    region_name_html = param.String("Central Europe")
     _glacier_names = param.List(default=[""])
     glacier_name = param.Selector()
     year = param.Selector(objects=range(2000, 2020), default=2017)
@@ -372,27 +89,57 @@ class CryotempoSelection(param.Parameterized):
     )
     metadata = param.Dict(default=None)
     debug = param.Integer(default=200, bounds=(0, None))
+    loading = param.Boolean(default=False)
 
     def __init__(self, **params):
         super(CryotempoSelection, self).__init__(**params)
         self.figure = hv.Layout()
+        self.plot_l1 = pn.FlexBox(
+            sizing_mode="stretch_width",
+            styles={
+                "flex": "1 1 auto",
+                "align-items": "stretch",
+                "align-content": "flex-start",
+                "flex-wrap": "nowrap",
+            },
+        )
+        self.plot_l2 = pn.FlexBox()
+        self.plot_title = pn.pane.HTML()
+        self.map = pn.FlexBox()
+        # self.map = pn.FloatPanel(
+        #     contained=True,
+        #     position="left-center",
+        #     config={"headerControls": {"close": "remove"}},
+        #     width=300,
+        #     height=325,
+        #     # name=self.region_name
+        # )
         self.binder = oggm_bindings.BindingsCryotempo()
         if not self.cached_data:
             self.binder.init_oggm(dirname="test")
         self.cache_path = Path("./static/data/l2_precompute").resolve()
         self.artist = dtcg_plotting.HoloviewsDashboardL1()
         self.data = None
-        self.plot = pn.FlexBox()
-        self.map = pn.FlexBox()
+        # self.tap = hv.streams.SingleTap()
+        self.tap = hv.streams.Selection1D()
         self.metadata = self.get_metadata()
         # if self.glacier_name:
         self.rgi_id = self.set_rgi_id()
+        self.region_name_html = self.set_region_name()
         self._hide_params()
+
         if not self.cached_data:
             self.get_dashboard_data()
         else:
             self.get_dashboard_data_cached()
         self.set_plot()
+
+    def loading_indicator(func):
+        def set_loading_state(self, *args, **kwargs):
+            with self.param.update(loading=True):
+                return func(self, *args, **kwargs)
+
+        return set_loading_state
 
     def _hide_params(self):
         """Hides parameters from GUI."""
@@ -405,18 +152,31 @@ class CryotempoSelection(param.Parameterized):
             "cached_data",
             "metadata",
             "debug",
+            "use_multiprocessing",
+            "loading",
+            "region_name_html",
         ]:
             self.param[p_name].precedence = -1
 
-    @pn.cache
+    @param.depends("region_name_html", "glacier_name", "year", "rgi_id", watch=True)
+    def set_plot_metadata(self):
+        if not self.glacier_name:
+            glacier_name = "Hintereisferner"
+        else:
+            glacier_name = self.glacier_name
+        title = f"{glacier_name}, {self.region_name_html} ({self.year})"
+        self.plot_title.object = f"""<h1>{title}</h1>"""
+
+    # @pn.cache
     @param.depends("region_name")
+    @loading_indicator
     def get_metadata(self) -> dict:
         """Get glacier metadata.
 
         Stores glacier metadata to avoid calling and opening the same
         file multiple times.
         """
-        pn.io.loading.start_loading_spinner(self.plot)
+        # pn.io.loading.start_loading_spinner(self.plot)
         metadata = {"name": [""], "id": [""], "glacier_names": {}}
         if not self.cached_data:
             metadata["region_names"] = sorted(
@@ -439,8 +199,13 @@ class CryotempoSelection(param.Parameterized):
             for k, v in metadata["glacier_names"].items():
                 glacier_hash.update({j["Name"]: i for i, j in v.items()})
             metadata["lookup"] = glacier_hash
-        pn.io.loading.stop_loading_spinner(self.plot)
+        # pn.io.loading.stop_loading_spinner(self.plot)
         return metadata
+
+    @param.depends("glacier_name", "loading", watch=True)
+    def set_loading_indicator_state(self, spinning: bool = False):
+        self.plot_l1.loading = self.loading
+        self.plot_l2.loading = self.loading
 
     @param.depends(
         "year",
@@ -451,6 +216,7 @@ class CryotempoSelection(param.Parameterized):
         "oggm_model",
         watch=True,
     )
+    @loading_indicator
     def set_plot(self):
         """Set component graphics.
 
@@ -458,24 +224,51 @@ class CryotempoSelection(param.Parameterized):
         """
         if self.data is not None:
             self.rgi_id = self.set_rgi_id()
-            self.figure = self.plot_dashboard(
+            glacier_map = self.plot_selection_map(
+                data=self.data, glacier_name=self.glacier_name
+            ).opts(max_width=250)
+            self.figure = self.plot_dashboard_l1(
                 data=self.data,
                 glacier_name=self.glacier_name,
             )
-            self.map.objects = [
-                self.plot_selection_map(
-                    data=self.data, glacier_name=self.glacier_name
-                ).opts(max_width=250)
-            ]
-            self.plot.objects = [i for i in self.figures]
+            self.plot_l1.objects = [i for i in self.figures]
+            self.figure = self.plot_dashboard_l2(
+                data=self.data,
+                glacier_name=self.glacier_name,
+            )
+            self.plot_l2.objects = [i for i in self.figures]
+            stream = hv.streams.Selection1D(source=glacier_map)
+            print(stream)
+            # posxy = hv.streams.Tap(source=glacier_map, x=self.rgi_id)
+            self.tap.source = glacier_map
+            self.map.objects = [glacier_map]
+            # self.map.name = self.region_name
+
+            print(self.tap)
+            # self.set_loading_indicator_state(spinning=False)
 
     @param.depends("glacier_name", "rgi_id")
+    @loading_indicator
     def set_rgi_id(self):
         """Set glacier RGI-ID from a glacier name."""
 
         default_glacier = "RGI60-11.00897"  # Hef because it appears first
         self.rgi_id = self.metadata["lookup"].get(self.glacier_name, default_glacier)
         return self.rgi_id
+
+    @param.depends("rgi_id", "glacier_name", watch=True)
+    def set_region_name(self):
+        """Set region name from RGI ID."""
+
+        region_id = self.rgi_id.split("-")[1]
+
+        if "11." in region_id:
+            self.param.update(region_name_html="Central Europe")
+        elif "06." in region_id:
+            self.param.update(region_name_html="Iceland")
+        else:
+            self.param.update(region_name_html="")
+        return self.region_name_html
 
     @param.depends(
         "region_name",
@@ -487,7 +280,6 @@ class CryotempoSelection(param.Parameterized):
     )
     def get_dashboard_data(self) -> dict:
         """Get data from OGGM."""
-        pn.io.loading.start_loading_spinner(self.plot)
         gdir, datacube = self.get_data([self.rgi_id])
         print("Calibrating model...")
         _, _, smb = self.binder.calibrator.run_calibration(
@@ -500,7 +292,6 @@ class CryotempoSelection(param.Parameterized):
             "smb": smb,
             "runoff_data": runoff_data,
         }
-        pn.io.loading.stop_loading_spinner(self.plot)
 
     @param.depends(
         "region_name",
@@ -510,6 +301,7 @@ class CryotempoSelection(param.Parameterized):
         "oggm_model",
         watch=True,
     )
+    @loading_indicator
     def get_dashboard_data_cached(self) -> dict:
         """Get data from precomputed cache.
 
@@ -525,7 +317,6 @@ class CryotempoSelection(param.Parameterized):
             glacier outlines as a gpd.Dataframe.
         """
 
-        pn.io.loading.start_loading_spinner(self.plot)
         self.rgi_id = self.set_rgi_id()
         cached_data = self.binder.get_cached_data(
             rgi_id=self.rgi_id, cache=self.cache_path
@@ -539,7 +330,6 @@ class CryotempoSelection(param.Parameterized):
             "runoff_data": cached_data.get("runoff", None),
             "outlines": cached_data.get("outlines", None),
         }
-        pn.io.loading.stop_loading_spinner(self.plot)
 
     def get_data(self, rgi_ids: list):
         """Get dashboard data.
@@ -562,7 +352,7 @@ class CryotempoSelection(param.Parameterized):
         gdir, datacube = self.binder.get_eolis_data(gdir)
         return gdir, datacube
 
-    @pn.cache
+    @loading_indicator
     def get_cached_region_outlines(
         self,
         region_id: int,
@@ -590,7 +380,6 @@ class CryotempoSelection(param.Parameterized):
 
         return shapefile
 
-    @pn.cache
     def plot_selection_map(self, data: dict, glacier_name: str = "") -> hv.Layout:
         """Plot map showing the selected glacier.
 
@@ -618,7 +407,6 @@ class CryotempoSelection(param.Parameterized):
         ).opts(xlabel="", ylabel="", xaxis=None, yaxis=None, scalebar=True)
         return fig_glacier_highlight
 
-    # @pn.cache
     def plot_dashboard(
         self,
         data,
@@ -719,15 +507,206 @@ class CryotempoSelection(param.Parameterized):
                 shared_axes=False,
                 title=self.artist.title,
                 fontsize={"title": 18},
-                sizing_mode="scale_both",
+                sizing_mode="stretch_width",
                 merge_tools=False,
                 tabs=True,
             ),
             pn.Row(
                 hv.Layout(figures[2:]).opts(
-                    shared_axes=False, sizing_mode="scale_both", merge_tools=False
+                    shared_axes=False, sizing_mode="stretch_width", merge_tools=False
                 )
             ),
         )
+
+        return self.artist.dashboard
+
+    @loading_indicator
+    def plot_dashboard_l1(
+        self,
+        data,
+        glacier_name: str = "",
+    ) -> hv.Layout:
+        """Plot a dashboard showing runoff data.
+
+        Parameters
+        ----------
+        data : dict
+            Contains glacier data, shapefile, and optionally runoff
+            data and observations.
+        glacier_name : str, optional
+            Name of glacier in subregion. Default empty string.
+
+        Returns
+        -------
+        hv.Layout
+            Dashboard showing EO and modelled specific mass balance and
+            runoff.
+        """
+        self.plot_cryo = dtcg_plotting.BokehSynthetic()
+        self.plot_graph = dtcg_plotting.BokehGraph()
+        self.plot_map = dtcg_plotting.BokehMapOutlines()
+
+        runoff_data = data["runoff_data"]
+        gdir = data["gdir"]
+        datacube = data["datacube"]
+        smb = data["smb"]
+
+        fig_monthly_runoff = self.plot_graph.plot_runoff_timeseries(
+            runoff=runoff_data["monthly_runoff"],
+            ref_year=self.year,
+            year_minimum_runoff=runoff_data["runoff_year_min"],
+            year_maximum_runoff=runoff_data["runoff_year_max"],
+        )
+        fig_runoff_cumulative = self.plot_graph.plot_runoff_timeseries(
+            runoff=runoff_data["monthly_runoff"],
+            ref_year=self.year,
+            cumulative=True,
+        )
+        fig_daily_mb = self.plot_cryo.plot_mb_comparison(
+            smb=smb,
+            ref_year=self.year,
+            datacube=None,
+            gdir=gdir,
+            cumulative=False,
+        )
+        fig_cumulative_mb = self.plot_cryo.plot_mb_comparison(
+            smb=smb,
+            ref_year=self.year,
+            datacube=None,
+            gdir=gdir,
+            cumulative=True,
+        )
+        figures = [
+            fig_daily_mb,
+            fig_cumulative_mb,
+            fig_monthly_runoff,
+            fig_runoff_cumulative,
+        ]
+
+        if datacube is not None:
+            figures = [
+                fig_daily_mb.opts(title=f"Specific Mass Balance (OGGM)"),
+                fig_cumulative_mb.opts(
+                    title=f"Cumulative Specific Mass Balance (OGGM)"
+                ),
+                fig_monthly_runoff,
+                fig_runoff_cumulative,
+            ]
+        self.figures = figures
+
+        if glacier_name:
+            self.artist.set_dashboard_title(name=self.glacier_name)
+
+        self.artist.dashboard = pn.Column(
+            pn.Row(
+                hv.Layout(figures[:2]).opts(
+                    shared_axes=False,
+                    title=self.artist.title,
+                    fontsize={"title": 18},
+                    sizing_mode="stretch_width",
+                    merge_tools=False,
+                ),
+                styles={
+                    "flex": "1 1 auto",
+                    "align-items": "stretch",
+                    "align-content": "flex-start",
+                    "flex-wrap": "nowrap",
+                },
+            ),
+            pn.Row(
+                hv.Layout(figures[2:]).opts(
+                    shared_axes=False, sizing_mode="stretch_width", merge_tools=False
+                ),
+                styles={
+                    "flex": "1 1 auto",
+                    "align-items": "stretch",
+                    "align-content": "flex-start",
+                    "flex-wrap": "nowrap",
+                },
+            ),
+            styles={
+                "flex": "1 1 auto",
+                "align-items": "stretch",
+                "align-content": "flex-start",
+                "flex-wrap": "nowrap",
+            },
+        )
+
+        return self.artist.dashboard
+
+    @loading_indicator
+    def plot_dashboard_l2(
+        self,
+        data,
+        glacier_name: str = "",
+    ) -> hv.Layout:
+        """Plot a dashboard showing runoff data.
+
+        Parameters
+        ----------
+        data : dict
+            Contains glacier data, shapefile, and optionally runoff
+            data and observations.
+        glacier_name : str, optional
+            Name of glacier in subregion. Default empty string.
+
+        Returns
+        -------
+        hv.Layout
+            Dashboard showing EO and modelled specific mass balance and
+            runoff.
+        """
+        self.plot_cryo = dtcg_plotting.BokehSynthetic()
+        self.plot_graph = dtcg_plotting.BokehGraph()
+        self.plot_map = dtcg_plotting.BokehMapOutlines()
+
+        runoff_data = data["runoff_data"]
+        gdir = data["gdir"]
+        datacube = data["datacube"]
+        smb = data["smb"]
+        figures = []
+        if datacube is not None:
+            fig_eo_elevation = self.plot_cryo.plot_eolis_timeseries(
+                datacube=datacube,
+                mass_balance=True,
+                glacier_area=gdir.get("rgi_area_km2", None),
+            ).opts(title="Monthly Cumulative Specific Mass Balance (CryoSat)")
+
+            fig_eo_smb = self.plot_cryo.plot_eolis_smb(
+                datacube=datacube,
+                ref_year=self.year,
+                years=None,
+                cumulative=False,
+                glacier_area=gdir.get("rgi_area_km2", None),
+            ).opts(title="Cumulative Specific Mass Balance (CryoSat)")
+            figures = [
+                fig_eo_elevation,
+                fig_eo_smb,
+            ]
+        self.figures = figures
+
+        if not glacier_name:
+            glacier_name = gdir.get("name", "")
+
+        self.artist.set_dashboard_title(name=glacier_name)
+
+        self.artist.dashboard = pn.Column(
+            hv.Layout(figures).opts(
+                shared_axes=False,
+                title=self.artist.title,
+                fontsize={"title": 18},
+                sizing_mode="stretch_width",
+                merge_tools=False,
+            ),
+            styles={
+                "flex": "1 1 auto",
+                "align-items": "stretch",
+                "align-content": "flex-start",
+                "flex-wrap": "nowrap",
+            },
+        )
+        if datacube is None:
+            self.artist.dashboard = pn.Column("No L2 data available.", name="test")
+            self.figures = [pn.Column("No L2 data available.", name="test")]
 
         return self.artist.dashboard

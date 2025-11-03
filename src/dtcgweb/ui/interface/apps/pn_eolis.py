@@ -46,9 +46,17 @@ def get_eolis_dashboard():
         groups[k] = sorted([j["Name"] for i, j in v.items()])
         # groups[k] = {j["Name"]:i for i,j in v.items()}
 
+    # dropdown_glacier = {
+    #     "widget_type": pn.widgets.Select,
+    #     "groups": groups,
+    # }
     dropdown_glacier = {
         "widget_type": pn.widgets.Select,
-        "groups": groups,
+        "groups": rs.metadata["hash"],
+    }
+    dropdown_region = {
+        "widget_type": pn.widgets.Select,
+        "objects": ["Central Europe", "Iceland"],
     }
 
     sidebar = [
@@ -57,6 +65,7 @@ def get_eolis_dashboard():
             name="",
             widgets={
                 "glacier_name": dropdown_glacier,
+                "region_name": dropdown_region,
             },
         ),
     ]
@@ -91,25 +100,54 @@ def get_eolis_dashboard_with_selection():
     # Dropdown
     # load region/subregion names dynamically from data
 
-    groups = {}
-    for k, v in rs.metadata["glacier_names"].items():
-        groups[k] = sorted([j["Name"] for i, j in v.items()])
-        # groups[k] = {j["Name"]:i for i,j in v.items()}
+    # groups = {}
+    # for k, v in rs.metadata["glacier_names"].items():
+    #     groups[k] = sorted([j["Name"] for i, j in v.items()])
+    #     # groups[k] = {j["Name"]:i for i,j in v.items()}
 
+    # dropdown_glacier = {
+    #     "widget_type": pn.widgets.Select,
+    #     "groups": groups,
+    # }
     dropdown_glacier = {
         "widget_type": pn.widgets.Select,
-        "groups": groups,
+        # "options": rs.metadata["test"],
+        "options": rs.param._glacier_names,
     }
+    # dropdown_region = {
+    #     "widget_type": pn.widgets.Select,
+    #     "objects": ["Central Europe", "Iceland"],
+    # }
+    # loading_indicator = rs.loading_indicator
+
+    # loading_indicator = pn.indicators.LoadingSpinner(
+    #         value=rs.param.loading, name=""
+    #     )
+    # loading_indicator = {
+    #     "widget_type": pn.indicators.LoadingSpinner(),
+    #     "value": rs.param.loading,
+    # }
 
     sidebar = [
         pn.Param(
             rs.param,
-            name="",
+            name="First select a region:",
             widgets={
                 "glacier_name": dropdown_glacier,
+                # "glacier_name": dropdown_region,
+                # "loading_indicator": loading_indicator
             },
         ),
         rs.map,
+        rs.details,
+        # loading_indicator,
+        # pn.Param(
+        #     rs.loading_indicator,
+        #     name="Loading Indicator",
+        #     widgets={
+        #         "loading_indicator": loading_indicator
+        #     },
+        # ),
     ]
 
     dashboard_content = pn.Column(
@@ -123,7 +161,7 @@ def get_eolis_dashboard_with_selection():
                 "align-content": "stretch",
                 "flex-wrap": "nowrap",
             },
-            # sizing_mode="scale_both"
+            sizing_mode="stretch_width",
         ),
         styles={
             "flex": "1 1 auto",
@@ -131,15 +169,30 @@ def get_eolis_dashboard_with_selection():
             "align-content": "stretch",
             "flex-wrap": "nowrap",
         },
-        # sizing_mode="scale_both"
+        sizing_mode="stretch_width",
+        loading=rs.param.loading,
     )
+
     panel = pn.template.MaterialTemplate(
         title="L2 Dashboard Prototype",
-        # busy_indicator=indicator_loading,
+        busy_indicator=pn.indicators.LoadingSpinner(size=40),
         sidebar=sidebar,
         logo="./static/img/dtc_logo_inv_min.png",
         main=dashboard_content,
         sidebar_width=250,
+    )
+    panel.sidebar.append(
+        pn.FlexBox(
+            pn.indicators.LoadingSpinner(value=rs.param.loading, size=40),
+            styles={
+                "flex": "1 1 auto",
+                "align-items": "center",
+                "align-content": "flex-start",
+                "flex-wrap": "nowrap",
+                "padding-left": "15",
+                "padding-top": "15",
+            },
+        )
     )
 
     return panel

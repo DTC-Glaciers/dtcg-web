@@ -22,8 +22,8 @@ from pathlib import Path
 
 import dtcg.integration.oggm_bindings as oggm_bindings
 import dtcg.interface.plotting as dtcg_plotting
-import holoviews as hv
 import geopandas as gpd
+import holoviews as hv
 import panel as pn
 import param
 from panel.io import hold
@@ -124,6 +124,7 @@ class CryotempoSelection(param.Parameterized):
         self.cache_path = Path("./static/data/l2_precompute").resolve()
         self.artist = dtcg_plotting.HoloviewsDashboardL1()
         self.data = None
+        self.details = pn.pane.HTML()
         # self.tap = hv.streams.SingleTap()
         self.tap = hv.streams.Selection1D()
         self.metadata = self.get_metadata()
@@ -141,6 +142,7 @@ class CryotempoSelection(param.Parameterized):
 
         self.set_plot()
         self.set_map()
+        self.set_details()
 
     def loading_indicator(func):
         def set_loading_state(self, *args, **kwargs):
@@ -281,6 +283,24 @@ class CryotempoSelection(param.Parameterized):
             # posxy = hv.streams.Tap(source=glacier_map, x=self.rgi_id)
             self.tap.source = glacier_map
             self.map.objects = [glacier_map]
+
+    @param.depends("debug", "glacier_name", watch=True)
+    def set_details(self):
+        if self.data is not None:
+            rgi_id = self.get_rgi_id(self.glacier_name)
+            details = self.binder.get_outline_details(
+                polygon=self.data[rgi_id]["outlines"].iloc[0]
+            )
+            table = ""
+            for k, v in details.items():
+                table_row = (
+                    f"<tr><th>{k}</th><td>{' '.join((v['value'],v['unit']))}</td></tr>"
+                )
+                table = f"{table}{table_row}"
+
+            self.details.object = (
+                f"<hr></hr><h2>Glacier Details</h2><table>{table}</table><hr></hr>"
+            )
 
     @param.depends("glacier_name")
     @loading_indicator

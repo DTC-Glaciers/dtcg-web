@@ -139,6 +139,7 @@ def get_eolis_dashboard_with_selection():
             },
         ),
         rs.map,
+        rs.details,
         # loading_indicator,
         # pn.Param(
         #     rs.loading_indicator,

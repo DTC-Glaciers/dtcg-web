@@ -13,6 +13,6 @@ dependencies:
   - pytest
   - pip
   - pip:
-    - git+https://github.com/DTC-Glaciers/dtcg@v0.4.3
+    - git+https://github.com/DTC-Glaciers/dtcg@v0.4.7
     - git+https://github.com/gampnico/oggm@feat-dtcg
     - -e .

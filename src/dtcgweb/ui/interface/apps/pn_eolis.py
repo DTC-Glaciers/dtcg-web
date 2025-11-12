@@ -15,10 +15,12 @@ Copyright 2025 DTCG Contributors
 
 ===
 
-User interface displaying L2 dashboard for specific glaciers.
+User interface displaying dashboard data for specific glaciers.
 """
 
 import panel as pn
+
+pn.extension(sizing_mode="stretch_width", defer_load=True, loading_indicator=True)
 
 from ...components.cryotempo_selection import CryotempoSelection
 
@@ -41,15 +43,6 @@ def get_eolis_dashboard():
     # Dropdown
     # load region/subregion names dynamically from data
 
-    groups = {}
-    for k, v in rs.metadata["glacier_names"].items():
-        groups[k] = sorted([j["Name"] for i, j in v.items()])
-        # groups[k] = {j["Name"]:i for i,j in v.items()}
-
-    # dropdown_glacier = {
-    #     "widget_type": pn.widgets.Select,
-    #     "groups": groups,
-    # }
     dropdown_glacier = {
         "widget_type": pn.widgets.Select,
         "groups": rs.metadata["hash"],
@@ -73,7 +66,6 @@ def get_eolis_dashboard():
     dashboard_content = [rs.plot]  # this is the dashboard content
     panel = pn.template.MaterialTemplate(
         title="L2 Dashboard Prototype",
-        # busy_indicator=indicator_loading,
         sidebar=sidebar,
         logo="./static/img/dtc_logo_inv_min.png",
         main=dashboard_content,
@@ -97,36 +89,10 @@ def get_eolis_dashboard_with_selection():
     Note that some buttons are already declared in RegionSelection.
     """
 
-    # Dropdown
-    # load region/subregion names dynamically from data
-
-    # groups = {}
-    # for k, v in rs.metadata["glacier_names"].items():
-    #     groups[k] = sorted([j["Name"] for i, j in v.items()])
-    #     # groups[k] = {j["Name"]:i for i,j in v.items()}
-
-    # dropdown_glacier = {
-    #     "widget_type": pn.widgets.Select,
-    #     "groups": groups,
-    # }
     dropdown_glacier = {
         "widget_type": pn.widgets.Select,
-        # "options": rs.metadata["test"],
         "options": rs.param._glacier_names,
     }
-    # dropdown_region = {
-    #     "widget_type": pn.widgets.Select,
-    #     "objects": ["Central Europe", "Iceland"],
-    # }
-    # loading_indicator = rs.loading_indicator
-
-    # loading_indicator = pn.indicators.LoadingSpinner(
-    #         value=rs.param.loading, name=""
-    #     )
-    # loading_indicator = {
-    #     "widget_type": pn.indicators.LoadingSpinner(),
-    #     "value": rs.param.loading,
-    # }
 
     sidebar = [
         pn.Param(
@@ -134,27 +100,17 @@ def get_eolis_dashboard_with_selection():
             name="First select a region:",
             widgets={
                 "glacier_name": dropdown_glacier,
-                # "glacier_name": dropdown_region,
-                # "loading_indicator": loading_indicator
             },
         ),
         rs.map,
         rs.details,
-        # loading_indicator,
-        # pn.Param(
-        #     rs.loading_indicator,
-        #     name="Loading Indicator",
-        #     widgets={
-        #         "loading_indicator": loading_indicator
-        #     },
-        # ),
     ]
 
     dashboard_content = pn.Column(
         rs.plot_title,
         pn.Tabs(
-            ("L1 (OGGM)", rs.plot_l1),
-            ("L2 (Cryosat)", rs.plot_l2),
+            ("L1 (OGGM)", rs.plot_oggm),
+            ("L2 (Cryosat)", rs.plot_cryosat),
             styles={
                 "flex": "0 0 auto",
                 "align-items": "stretch",
@@ -170,7 +126,6 @@ def get_eolis_dashboard_with_selection():
             "flex-wrap": "nowrap",
         },
         sizing_mode="stretch_width",
-        loading=rs.param.loading,
     )
 
     panel = pn.template.MaterialTemplate(
@@ -180,19 +135,6 @@ def get_eolis_dashboard_with_selection():
         logo="./static/img/dtc_logo_inv_min.png",
         main=dashboard_content,
         sidebar_width=250,
-    )
-    panel.sidebar.append(
-        pn.FlexBox(
-            pn.indicators.LoadingSpinner(value=rs.param.loading, size=40),
-            styles={
-                "flex": "1 1 auto",
-                "align-items": "center",
-                "align-content": "flex-start",
-                "flex-wrap": "nowrap",
-                "padding-left": "15",
-                "padding-top": "15",
-            },
-        )
     )
 
     return panel

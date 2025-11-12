@@ -28,20 +28,21 @@ import panel as pn
 import param
 from panel.io import hold
 
-pn.extension(design="material", sizing_mode="stretch_width")
-# pn.extension(loading_spinner="dots", loading_color="#00aa41", template="material")
-pn.extension(loading_spinner="arcs", loading_color="#000000")  # , template="material")
-pn.param.ParamMethod.loading_indicator = True
+pn.extension(
+    design="material",
+    sizing_mode="stretch_width",
+    defer_load=True,
+    loading_indicator=True,
+)
 hv.extension("bokeh")
-# pn.config.loading_spinner = 'petal'
-pn.config.loading_color = "black"
 
 
 class CryotempoSelection(param.Parameterized):
-    """Panel wrapper around DTCG API for L1 datacubes.
+    """Panel wrapper for displaying datacubes.
 
-    All computations should be processed by DTCG backend API, not this
-    frontend. The wrapper binds DTCG API calls to a user interface.
+    All processing and plot generation should be handled by the ``dtcg``
+    backend, not this frontend. The wrapper binds DTCG API calls to a
+    user interface.
     UI parameters declared here can be overwritten in the child
     interface.
 
@@ -66,6 +67,7 @@ class CryotempoSelection(param.Parameterized):
         EOLIS-enhanced gridded data.
     """
 
+    # Public parameters editable via interface
     action = param.String(default="select_glacier")
     region_name = param.Selector(
         objects=["Central Europe", "Iceland"], default="Central Europe"
@@ -80,6 +82,8 @@ class CryotempoSelection(param.Parameterized):
         objects={"Daily": "DailyTIModel", "Daily Surface Tracking": "SfcTypeTIModel"},
         default="DailyTIModel",
     )
+
+    # Private parameters
     use_multiprocessing = param.Boolean(True)
     cached_data = param.Boolean(True)
     oggm_params = param.Dict(
@@ -91,13 +95,11 @@ class CryotempoSelection(param.Parameterized):
     )
     metadata = param.Dict(default=None)
     debug = param.Integer(default=200, bounds=(0, None))
-    loading = param.Boolean(default=False)
-    # loading_bool = param.Boolean(default=False)
 
     def __init__(self, **params):
         super(CryotempoSelection, self).__init__(**params)
         self.figure = hv.Layout()
-        self.plot_l1 = pn.FlexBox(
+        self.plot_oggm = pn.FlexBox(
             sizing_mode="stretch_width",
             styles={
                 "flex": "1 1 auto",
@@ -106,18 +108,12 @@ class CryotempoSelection(param.Parameterized):
                 "flex-wrap": "nowrap",
             },
         )
-        self.plot_l2 = pn.FlexBox()
+        self.plot_cryosat = pn.FlexBox(
+            sizing_mode="stretch_width",
+            styles=self.get_flex_styling(),
+        )
         self.plot_title = pn.pane.HTML()
         self.map = pn.FlexBox()
-        # self.loading_indicator = pn.indicators.LoadingSpinner(value=False, name="")
-        # self.map = pn.FloatPanel(
-        #     contained=True,
-        #     position="left-center",
-        #     config={"headerControls": {"close": "remove"}},
-        #     width=300,
-        #     height=325,
-        #     # name=self.region_name
-        # )
         self.binder = oggm_bindings.BindingsCryotempo()
         if not self.cached_data:
             self.binder.init_oggm(dirname="test")
@@ -125,10 +121,8 @@ class CryotempoSelection(param.Parameterized):
         self.artist = dtcg_plotting.HoloviewsDashboardL1()
         self.data = None
         self.details = pn.pane.HTML()
-        # self.tap = hv.streams.SingleTap()
         self.tap = hv.streams.Selection1D()
         self.metadata = self.get_metadata()
-        # if self.glacier_name:
         if not self.cached_data:
             self.get_dashboard_data()
         else:
@@ -144,22 +138,24 @@ class CryotempoSelection(param.Parameterized):
         self.set_map()
         self.set_details()
 
-    def loading_indicator(func):
-        def set_loading_state(self, *args, **kwargs):
-            with self.param.update(loading=True):
-                return func(self, *args, **kwargs)
+    def get_flex_styling(self, style=None) -> dict:
+        """Get CSS styling for flex boxes.
 
-        return set_loading_state
+        .. note:: Not-so-temporary workaround for unsolved bugs in
+        Panel:
+           - https://github.com/holoviz/panel/issues/5343
+           - https://github.com/holoviz/panel/issues/5054
+           - https://github.com/holoviz/panel/issues/1296
+        """
+        if not style:
+            style = {
+                "flex": "1 1 auto",
+                "align-items": "stretch",
+                "align-content": "flex-start",
+                "flex-wrap": "nowrap",
+            }
 
-    @param.depends("loading", watch=True)
-    def set_loading_indicator(self):
-        if self.param.loading:
-            name = "Loading..."
-        else:
-            name = ""
-        self.loading_indicator = pn.indicators.LoadingSpinner(
-            value=self.param.loading, name=name
-        )
+        return style
 
     def _hide_params(self):
         """Hides parameters from GUI."""
@@ -169,12 +165,10 @@ class CryotempoSelection(param.Parameterized):
             "action",
             "_glacier_names",
             "_glacier_rgi_ids",
-            # "region_name",
             "cached_data",
             "metadata",
             "debug",
             "use_multiprocessing",
-            "loading",
             "region_name_html",
         ]:
             self.param[p_name].precedence = -1
@@ -188,9 +182,6 @@ class CryotempoSelection(param.Parameterized):
         title = f"{glacier_name}, {self.region_name_html} ({self.year})"
         self.plot_title.object = f"""<h1>{title}</h1>"""
 
-    # @pn.cache
-    # @param.depends("region_name")
-    @loading_indicator
     def get_metadata(self) -> dict:
         """Get glacier metadata.
 
@@ -224,7 +215,6 @@ class CryotempoSelection(param.Parameterized):
         return metadata
 
     @param.depends("region_name", watch=True)
-    @loading_indicator
     def get_glacier_names(self):
         glacier_names = self.metadata["glacier_names"][self.region_name]
         glacier_hash = {}
@@ -234,13 +224,7 @@ class CryotempoSelection(param.Parameterized):
         self._glacier_names = sorted(list(glacier_hash.keys()))
         self._glacier_rgi_ids = sorted(list(glacier_hash.values()))
 
-    @param.depends("loading", watch=True)
-    def set_loading_indicator_state(self):
-        self.plot_l1.loading = self.loading
-        self.plot_l2.loading = self.loading
-
     @param.depends("year", "debug", "glacier_name", "oggm_model", watch=True)
-    @loading_indicator
     def set_plot(self):
         """Set component graphics.
 
@@ -248,26 +232,19 @@ class CryotempoSelection(param.Parameterized):
         """
         if self.data is not None:
 
-            # self.set_rgi_id()
             rgi_id = self.get_rgi_id(self.glacier_name)
-            # rgi_id = self.get_rgi_id(glacier_name=self.glacier_name)
             data = self.data[rgi_id]
             print(rgi_id)
             self.figure = self.plot_dashboard_l1(
                 data=data,
                 glacier_name=self.glacier_name,
             )
-            self.plot_l1.objects = [i for i in self.figures]
+            self.plot_oggm.objects = [i for i in self.figures]
             self.figure = self.plot_dashboard_l2(
                 data=data,
                 glacier_name=self.glacier_name,
             )
-            self.plot_l2.objects = [i for i in self.figures]
-
-            # self.map.name = self.region_name
-
-            # print(self.tap)
-            # self.set_loading_indicator_state(spinning=False)
+            self.plot_cryosat.objects = [i for i in self.figures]
 
     @param.depends("debug", "glacier_name", watch=True)
     def set_map(self):
@@ -278,9 +255,6 @@ class CryotempoSelection(param.Parameterized):
             glacier_map = self.plot_selection_map(data=data, rgi_id=rgi_id).opts(
                 max_width=250
             )
-            stream = hv.streams.Selection1D(source=glacier_map)
-            # print(stream)
-            # posxy = hv.streams.Tap(source=glacier_map, x=self.rgi_id)
             self.tap.source = glacier_map
             self.map.objects = [glacier_map]
 
@@ -293,8 +267,12 @@ class CryotempoSelection(param.Parameterized):
             )
             table = ""
             for k, v in details.items():
+                if isinstance(v["value"], float):
+                    value = f"{v['value']:.2f}"
+                else:
+                    value = v["value"]
                 table_row = (
-                    f"<tr><th>{k}</th><td>{' '.join((v['value'],v['unit']))}</td></tr>"
+                    f"<tr><th>{k}</th><td>{' '.join((f'{value}', v['unit']))}</td></tr>"
                 )
                 table = f"{table}{table_row}"
 
@@ -303,7 +281,6 @@ class CryotempoSelection(param.Parameterized):
             )
 
     @param.depends("glacier_name")
-    @loading_indicator
     def set_rgi_id(self):
         """Set glacier RGI-ID from a glacier name."""
         self.rgi_id = self.get_rgi_id(glacier_name=self.glacier_name)
@@ -330,14 +307,6 @@ class CryotempoSelection(param.Parameterized):
             self.param.update(region_name_html="")
         return self.region_name_html
 
-    # @param.depends(
-    #     "region_name",
-    #     "glacier_name",
-    #     "oggm_params",
-    #     "rgi_id",
-    #     "oggm_model",
-    #     watch=False,
-    # )
     def get_dashboard_data(self) -> dict:
         """Get data from OGGM."""
         gdir, datacube = self.get_data([self.rgi_id])
@@ -353,9 +322,6 @@ class CryotempoSelection(param.Parameterized):
             "runoff_data": runoff_data,
         }
 
-    # @loading_indicator
-    @pn.cache
-    @loading_indicator
     def get_dashboard_data_cached(self) -> dict:
         """Get data from precomputed cache.
 
@@ -379,7 +345,6 @@ class CryotempoSelection(param.Parameterized):
             cached_data = self.binder.get_cached_data(
                 rgi_id=rgi_id, cache=self.cache_path
             )
-            # run_name = f"{self.oggm_model}_Hugonnet_2000-01-01_2020-01-01"
             data[rgi_id] = {
                 "gdir": cached_data.get("gdir", None),
                 "datacube": cached_data.get("eolis", None),
@@ -410,7 +375,6 @@ class CryotempoSelection(param.Parameterized):
         gdir, datacube = self.binder.get_eolis_data(gdir)
         return gdir, datacube
 
-    # @loading_indicator
     @pn.cache
     def get_cached_region_outlines(
         self,
@@ -457,9 +421,6 @@ class CryotempoSelection(param.Parameterized):
         """
         self.plot_map = dtcg_plotting.BokehMapOutlines()
         try:
-            outlines = data["outlines"].to_crs(4326)
-
-            title = outlines.get("Name", [""])[0]
             region_id = int(rgi_id[6:8])
             shapefile = self.get_cached_region_outlines(region_id=region_id)
             fig_glacier_highlight = self.plot_map.plot_region_with_glacier(
@@ -500,10 +461,7 @@ class CryotempoSelection(param.Parameterized):
         smb = data["smb"]
 
         fig_monthly_runoff = self.plot_graph.plot_runoff_timeseries(
-            runoff=runoff_data["monthly_runoff"],
-            ref_year=self.year,
-            year_minimum_runoff=runoff_data["runoff_year_min"],
-            year_maximum_runoff=runoff_data["runoff_year_max"],
+            runoff=runoff_data["monthly_runoff"], ref_year=self.year
         )
         fig_runoff_cumulative = self.plot_graph.plot_runoff_timeseries(
             runoff=runoff_data["monthly_runoff"],
@@ -582,7 +540,6 @@ class CryotempoSelection(param.Parameterized):
 
         return self.artist.dashboard
 
-    @loading_indicator
     def plot_dashboard_l1(
         self,
         data,
@@ -614,10 +571,7 @@ class CryotempoSelection(param.Parameterized):
         smb = data["smb"]
 
         fig_monthly_runoff = self.plot_graph.plot_runoff_timeseries(
-            runoff=runoff_data["monthly_runoff"],
-            ref_year=self.year,
-            year_minimum_runoff=runoff_data["runoff_year_min"],
-            year_maximum_runoff=runoff_data["runoff_year_max"],
+            runoff=runoff_data["monthly_runoff"], ref_year=self.year
         )
         fig_runoff_cumulative = self.plot_graph.plot_runoff_timeseries(
             runoff=runoff_data["monthly_runoff"],
@@ -668,35 +622,19 @@ class CryotempoSelection(param.Parameterized):
                     sizing_mode="stretch_width",
                     merge_tools=False,
                 ),
-                styles={
-                    "flex": "1 1 auto",
-                    "align-items": "stretch",
-                    "align-content": "flex-start",
-                    "flex-wrap": "nowrap",
-                },
+                styles=self.get_flex_styling(),
             ),
             pn.Row(
                 hv.Layout(figures[2:]).opts(
                     shared_axes=False, sizing_mode="stretch_width", merge_tools=False
                 ),
-                styles={
-                    "flex": "1 1 auto",
-                    "align-items": "stretch",
-                    "align-content": "flex-start",
-                    "flex-wrap": "nowrap",
-                },
+                styles=self.get_flex_styling(),
             ),
-            styles={
-                "flex": "1 1 auto",
-                "align-items": "stretch",
-                "align-content": "flex-start",
-                "flex-wrap": "nowrap",
-            },
+            styles=self.get_flex_styling(),
         )
 
         return self.artist.dashboard
 
-    @loading_indicator
     def plot_dashboard_l2(
         self,
         data,
@@ -722,10 +660,8 @@ class CryotempoSelection(param.Parameterized):
         self.plot_graph = dtcg_plotting.BokehGraph()
         self.plot_map = dtcg_plotting.BokehMapOutlines()
 
-        runoff_data = data["runoff_data"]
         gdir = data["gdir"]
         datacube = data["datacube"]
-        smb = data["smb"]
         figures = []
         if datacube is not None:
             fig_eo_elevation = self.plot_cryo.plot_eolis_timeseries(
@@ -760,15 +696,14 @@ class CryotempoSelection(param.Parameterized):
                 sizing_mode="stretch_width",
                 merge_tools=False,
             ),
-            styles={
-                "flex": "1 1 auto",
-                "align-items": "stretch",
-                "align-content": "flex-start",
-                "flex-wrap": "nowrap",
-            },
+            styles=self.get_flex_styling(),
         )
         if datacube is None:
-            self.artist.dashboard = pn.Column("No L2 data available.", name="test")
-            self.figures = [pn.Column("No L2 data available.", name="test")]
+            self.artist.dashboard = pn.Column(
+                "No CryoSat data available.", name="CryoSat Data"
+            )
+            self.figures = [
+                pn.Column("No CryoSat data available.", name="CryoSat Data")
+            ]
 
         return self.artist.dashboard

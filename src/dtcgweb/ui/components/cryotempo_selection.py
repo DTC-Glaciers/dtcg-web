@@ -26,7 +26,6 @@ import geopandas as gpd
 import holoviews as hv
 import panel as pn
 import param
-from panel.io import hold
 
 pn.extension(
     design="material",
@@ -173,12 +172,13 @@ class CryotempoSelection(param.Parameterized):
         ]:
             self.param[p_name].precedence = -1
 
-    @param.depends("region_name_html", "glacier_name", watch=True)
+    @param.depends("rgi_id", "region_name_html", "glacier_name", watch=True)
     def set_plot_metadata(self):
         if not self.glacier_name:
             glacier_name = "Hintereisferner"
         else:
             glacier_name = self.glacier_name
+        self.region_name_html = self.set_region_name()
         title = f"{glacier_name}, {self.region_name_html} ({self.year})"
         self.plot_title.object = f"""<h1>{title}</h1>"""
 
@@ -230,11 +230,11 @@ class CryotempoSelection(param.Parameterized):
 
         This updates the main dashboard content.
         """
+
         if self.data is not None:
 
             rgi_id = self.get_rgi_id(self.glacier_name)
             data = self.data[rgi_id]
-            print(rgi_id)
             self.figure = self.plot_dashboard_l1(
                 data=data,
                 glacier_name=self.glacier_name,
@@ -260,6 +260,7 @@ class CryotempoSelection(param.Parameterized):
 
     @param.depends("debug", "glacier_name", watch=True)
     def set_details(self):
+
         if self.data is not None:
             rgi_id = self.get_rgi_id(self.glacier_name)
             details = self.binder.get_outline_details(
@@ -284,7 +285,7 @@ class CryotempoSelection(param.Parameterized):
     def set_rgi_id(self):
         """Set glacier RGI-ID from a glacier name."""
         self.rgi_id = self.get_rgi_id(glacier_name=self.glacier_name)
-        print(self.rgi_id)
+        self.region_name_html = self.set_region_name()
 
     def get_rgi_id(self, glacier_name):
         """Get glacier RGI-ID from a glacier name."""
@@ -293,18 +294,23 @@ class CryotempoSelection(param.Parameterized):
 
         return rgi_id
 
-    @param.depends("rgi_id", "glacier_name", watch=True)
+    @param.depends("region_name_html", "rgi_id", "glacier_name", watch=True)
     def set_region_name(self):
         """Set region name from RGI ID."""
 
-        region_id = self.rgi_id.split("-")[1]
+        rgi_id = self.get_rgi_id(self.glacier_name)
+        region_id = rgi_id.split("-")[1]
 
         if "11." in region_id:
             self.param.update(region_name_html="Central Europe")
+            # self.region_name_html = "Central Europe"
         elif "06." in region_id:
             self.param.update(region_name_html="Iceland")
+            # self.region_name_html = "Iceland"
         else:
             self.param.update(region_name_html="")
+            # self.region_name_html = ""
+
         return self.region_name_html
 
     def get_dashboard_data(self) -> dict:
@@ -569,6 +575,10 @@ class CryotempoSelection(param.Parameterized):
         gdir = data["gdir"]
         datacube = data["datacube"]
         smb = data["smb"]
+        if len(smb.keys()) > 1:
+            for key, value in smb.items():
+                if "CryoTEMPO-EOLIS" in key:
+                    smb = {key: value}
 
         fig_monthly_runoff = self.plot_graph.plot_runoff_timeseries(
             runoff=runoff_data["monthly_runoff"], ref_year=self.year
@@ -593,17 +603,17 @@ class CryotempoSelection(param.Parameterized):
             cumulative=True,
         )
         figures = [
-            fig_daily_mb,
-            fig_cumulative_mb,
+            fig_daily_mb.opts(title=f"Specific Mass Balance (OGGM)"),
+            fig_cumulative_mb.opts(title=f"Cumulative Specific Mass Balance (OGGM)"),
             fig_monthly_runoff,
             fig_runoff_cumulative,
         ]
 
         if datacube is not None:
             figures = [
-                fig_daily_mb.opts(title=f"Specific Mass Balance (OGGM)"),
+                fig_daily_mb.opts(title=f"Specific Mass Balance (OGGM + CryoSat)"),
                 fig_cumulative_mb.opts(
-                    title=f"Cumulative Specific Mass Balance (OGGM)"
+                    title=f"Cumulative Specific Mass Balance (OGGM + CryoSat)"
                 ),
                 fig_monthly_runoff,
                 fig_runoff_cumulative,

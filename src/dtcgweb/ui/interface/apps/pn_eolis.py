@@ -109,8 +109,8 @@ def get_eolis_dashboard_with_selection():
     dashboard_content = pn.Column(
         rs.plot_title,
         pn.Tabs(
-            ("L1 (OGGM)", rs.plot_oggm),
-            ("L2 (Cryosat)", rs.plot_cryosat),
+            ("Model (OGGM)", rs.plot_oggm),
+            ("EO (Cryosat)", rs.plot_cryosat),
             styles={
                 "flex": "0 0 auto",
                 "align-items": "stretch",
@@ -129,7 +129,7 @@ def get_eolis_dashboard_with_selection():
     )
 
     panel = pn.template.MaterialTemplate(
-        title="L2 Dashboard Prototype",
+        title="Alpine and Icelandic Glacier Dashboard",
         busy_indicator=pn.indicators.LoadingSpinner(size=40),
         sidebar=sidebar,
         logo="./static/img/dtc_logo_inv_min.png",

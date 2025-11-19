@@ -381,7 +381,7 @@ class CryotempoSelection(param.Parameterized):
         gdir, datacube = self.binder.get_eolis_data(gdir)
         return gdir, datacube
 
-    @pn.cache
+    # @pn.cache
     def get_cached_region_outlines(
         self,
         region_id: int,

@@ -324,11 +324,16 @@ class CryotempoSelection(param.Parameterized):
     def get_zipped_datacube(
         self, rgi_id, zip_path=Path("./static/data/zarr_data/")
     ) -> Path:
+        # pn.state.notifications.info("Zipping, please wait...", duration=2000)
         try:
             path = self.streamer.zip_datacube(zip_path=zip_path, rgi_id=rgi_id)
         except FileNotFoundError as e:
-            print(f"FnF: {e}")
-            pn.state.notifications.error("No datacube available for this glacier.")
+            pn.state.notifications.position = "bottom-left"
+            pn.state.notifications.error(
+                "No datacube available for this glacier.", duration=3000
+            )
+        finally:
+            return path  # avoid unbound local errors and other such things
 
         return path
 

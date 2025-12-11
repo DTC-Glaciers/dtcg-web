@@ -126,11 +126,12 @@ class CryotempoSelection(param.Parameterized):
         self.details = pn.pane.HTML()
         self.tap = hv.streams.Selection1D()
         self.metadata = self.get_metadata()
-        if not self.cached_data:
-            self.get_dashboard_data()
-        else:
-            self.get_dashboard_data_cached()
         self.set_rgi_id()
+        if not self.cached_data:
+            self.set_dashboard_data()
+        else:
+            self.set_dashboard_data_cached()
+
         self.region_name_html = self.set_region_name()
         self.get_glacier_names()
 
@@ -242,6 +243,9 @@ class CryotempoSelection(param.Parameterized):
         if self.data is not None:
 
             rgi_id = self.get_rgi_id(self.glacier_name)
+            if rgi_id not in self.data.keys():
+                data = self.get_cached_data(rgi_id=rgi_id)
+                self.data[rgi_id] = data
             data = self.data[rgi_id]
             self.figure = self.plot_dashboard_l1(
                 data=data,
@@ -350,7 +354,7 @@ class CryotempoSelection(param.Parameterized):
         ]
         return self.download_button
 
-    def get_dashboard_data(self) -> dict:
+    def set_dashboard_data(self) -> dict:
         """Get data from OGGM."""
         gdir, datacube = self.get_data([self.rgi_id])
         print("Calibrating model...")
@@ -365,7 +369,8 @@ class CryotempoSelection(param.Parameterized):
             "runoff_data": runoff_data,
         }
 
-    def get_dashboard_data_cached(self) -> dict:
+    @param.depends("rgi_id", "glacier_name", watch=True)
+    def set_dashboard_data_cached(self) -> dict:
         """Get data from precomputed cache.
 
         This skips all processing steps, and the data is loaded into the
@@ -380,22 +385,36 @@ class CryotempoSelection(param.Parameterized):
             glacier outlines as a gpd.Dataframe.
         """
 
-        data = {}
+        if self.data is None:
+            self.data = {}
+        data = self.get_cached_data(rgi_id=self.rgi_id)
+        self.data[self.rgi_id] = data
 
-        rgi_ids = []
-        rgi_ids = self.metadata["lookup"].values()
-        for rgi_id in rgi_ids:
-            cached_data = self.binder.get_cached_data(
-                rgi_id=rgi_id, cache=self.cache_path
-            )
-            data[rgi_id] = {
-                "gdir": cached_data.get("gdir", None),
-                "datacube": cached_data.get("eolis", None),
-                "smb": cached_data.get("smb", None),
-                "runoff_data": cached_data.get("runoff", None),
-                "outlines": cached_data.get("outlines", None),
-            }
-        self.data = data
+    def get_cached_data(self, rgi_id: str) -> dict:
+        """Load a single precomputed glacier data file.
+
+        Parameters
+        ----------
+        rgi_id : str
+            Glacier RGI ID.
+
+        Returns
+        -------
+        dict
+            Cached glacier dataset containing minimal GlacierDirectory
+            data, datacube, time series for specific mass balance and
+            runoff, and glacier outline. Unavailable datasets default
+            to a ``NoneType`` object.
+        """
+        cached_data = self.binder.get_cached_data(rgi_id=rgi_id, cache=self.cache_path)
+        data = {
+            "gdir": cached_data.get("gdir", None),
+            "datacube": cached_data.get("eolis", None),
+            "smb": cached_data.get("smb", None),
+            "runoff_data": cached_data.get("runoff", None),
+            "outlines": cached_data.get("outlines", None),
+        }
+        return data
 
     def get_data(self, rgi_ids: list):
         """Get dashboard data.

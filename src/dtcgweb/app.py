@@ -19,12 +19,11 @@ DTCG web interface.
 """
 
 import os
-import subprocess
 from pathlib import Path
 
 import xarray as xr
 import zarr
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -131,26 +130,29 @@ async def get_404_handler(request, __):
 
 
 def stream_datacube(rgi_id):
-    stream_url = f"https://cluster.klima.uni-bremen.de/~dtcg/test_zarr/{rgi_id}.zarr/"
+    stream_url = f"https://cluster.klima.uni-bremen.de/~dtcg/datacubes_case_study_regions/v2026.2/L1_and_L2/{rgi_id}.zarr/"
 
     zipfile = f"./static/data/zarr_data/{rgi_id}.zarr.zip"
     store = zarr.storage.ZipStore(zipfile, mode="w")
-    with xr.open_datatree(
-        stream_url,
-        group=None,
-        chunks={},
-        engine="zarr",
-        consolidated=True,
-        decode_cf=True,
-    ) as stream:
-        stream.compute().to_zarr(
-            store=store,
-            #     f"./static/data/zarr_data/{rgi_id}.zarr/",
-            mode="w",
+    try:
+        with xr.open_datatree(
+            stream_url,
+            group=None,
+            chunks={},
+            engine="zarr",
             consolidated=True,
-            zarr_format=2,
-            # encoding=stream.encoding,
-        )
+            decode_cf=True,
+        ) as stream:
+            stream.compute().to_zarr(
+                store=store,
+                #     f"/static/data/zarr_data/{rgi_id}.zarr/",
+                mode="w",
+                consolidated=True,
+                zarr_format=2,
+                # encoding=stream.encoding,
+            )
+    except zarr.errors.GroupNotFoundError:
+        raise HTTPException(status_code=403, detail="This data cube does not exist.")
     return zipfile
 
 
@@ -163,7 +165,7 @@ async def download_datacube(rgi_id: str, format: str = "zarr"):
         )
     else:
         return RedirectResponse(
-            url=f"https://cluster.klima.uni-bremen.de/~dtcg/test_zarr/{rgi_id}.zarr/"
+            url=f"https://cluster.klima.uni-bremen.de/~dtcg/datacubes_case_study_regions/v2026.2/L1_and_L2/{rgi_id}.zarr/"
         )
 
 

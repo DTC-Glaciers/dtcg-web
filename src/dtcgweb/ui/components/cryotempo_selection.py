@@ -26,12 +26,14 @@ import geopandas as gpd
 import holoviews as hv
 import panel as pn
 import param
+from dtcg.api.external.call import StreamDatacube
 
 pn.extension(
     design="material",
     sizing_mode="stretch_width",
     defer_load=True,
     loading_indicator=True,
+    notifications=True,
 )
 hv.extension("bokeh")
 
@@ -111,9 +113,11 @@ class CryotempoSelection(param.Parameterized):
             sizing_mode="stretch_width",
             styles=self.get_flex_styling(),
         )
+        self.download_button = pn.WidgetBox()
         self.plot_title = pn.pane.HTML()
         self.map = pn.FlexBox()
         self.binder = oggm_bindings.BindingsCryotempo()
+        self.streamer = StreamDatacube()
         if not self.cached_data:
             self.binder.init_oggm(dirname="test")
         self.cache_path = Path("./static/data/l2_precompute").resolve()
@@ -137,6 +141,10 @@ class CryotempoSelection(param.Parameterized):
         self.set_plot()
         self.set_map()
         self.set_details()
+        # self.download_button = pn.widgets.FileDownload(
+        #     callback=pn.bind(self.download_datacube, rgi_id=self.rgi_id), filename=self.rgi_id
+        # )
+        # self.download_button = self.set_download_button()
 
     def get_flex_styling(self, style=None) -> dict:
         """Get CSS styling for flex boxes.
@@ -173,7 +181,7 @@ class CryotempoSelection(param.Parameterized):
         ]:
             self.param[p_name].precedence = -1
 
-    @param.depends("rgi_id", "region_name_html", "glacier_name", "year", watch=True)
+    @param.depends("rgi_id", "region_name_html", "glacier_name", watch=True)
     def set_plot_metadata(self):
         if not self.glacier_name:
             glacier_name = "Hintereisferner"
@@ -316,6 +324,35 @@ class CryotempoSelection(param.Parameterized):
             # self.region_name_html = ""
 
         return self.region_name_html
+
+    def get_zipped_datacube(
+        self, rgi_id, zip_path=Path("./static/data/zarr_data/")
+    ) -> Path:
+        # pn.state.notifications.info("Zipping, please wait...", duration=2000)
+        try:
+            path = self.streamer.zip_datacube(zip_path=zip_path, rgi_id=rgi_id)
+        except FileNotFoundError as e:
+            pn.state.notifications.position = "bottom-left"
+            pn.state.notifications.error(
+                "No datacube available for this glacier.", duration=3000
+            )
+        finally:
+            return path  # avoid unbound local errors and other such things
+
+        return path
+
+    @pn.depends("rgi_id", "glacier_name", watch=True)
+    def set_download_button(self):
+        rgi_id = self.get_rgi_id(self.glacier_name)
+        self.param.update(rgi_id=rgi_id)
+        self.download_button.objects = [
+            pn.widgets.FileDownload(
+                callback=pn.bind(self.get_zipped_datacube, rgi_id=rgi_id),
+                filename=f"{rgi_id}.zarr.zip",
+                label="Download Datacube",
+            )
+        ]
+        return self.download_button
 
     def set_dashboard_data(self) -> dict:
         """Get data from OGGM."""

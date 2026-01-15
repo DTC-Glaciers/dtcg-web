@@ -104,6 +104,7 @@ def get_eolis_dashboard_with_selection():
         ),
         rs.map,
         rs.details,
+        rs.download_button,
     ]
 
     dashboard_content = pn.Column(

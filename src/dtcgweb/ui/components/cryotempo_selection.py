@@ -1,5 +1,5 @@
 """
-Copyright 2025 DTCG Contributors
+Copyright 2025-2026 DTCG Contributors
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ Copyright 2025 DTCG Contributors
 Panel wrapper displaying runoff for specific glaciers.
 """
 
+from datetime import date
 from pathlib import Path
 
 import dtcg.integration.oggm_bindings as oggm_bindings
@@ -75,7 +76,10 @@ class CryotempoSelection(param.Parameterized):
     _glacier_names = param.List()
     _glacier_rgi_ids = param.List()
     glacier_name = param.Selector()
-    year = param.Selector(objects=range(2000, 2020), default=2017)
+    year = param.Selector(
+        objects=range(int(date.today().year) - 1, 1999, -1),
+        default=int(date.today().year) - 1,
+    )
     rgi_id = param.Selector()
     oggm_model = param.Selector(
         objects={"Daily": "DailyTIModel", "Daily Surface Tracking": "SfcTypeTIModel"},
@@ -242,6 +246,7 @@ class CryotempoSelection(param.Parameterized):
             self.figure = self.plot_dashboard_l1(
                 data=data,
                 glacier_name=self.glacier_name,
+                model_name=self.oggm_model,
             )
             self.plot_oggm.objects = [i for i in self.figures]
             self.figure = self.plot_dashboard_l2(
@@ -327,7 +332,7 @@ class CryotempoSelection(param.Parameterized):
         runoff_data = self.binder.get_aggregate_runoff(gdir=gdir)
         self.data = {
             "gdir": gdir,
-            "datacube": datacube,
+            "eolis": datacube,
             "smb": smb,
             "runoff_data": runoff_data,
         }
@@ -372,7 +377,7 @@ class CryotempoSelection(param.Parameterized):
         cached_data = self.binder.get_cached_data(rgi_id=rgi_id, cache=self.cache_path)
         data = {
             "gdir": cached_data.get("gdir", None),
-            "datacube": cached_data.get("eolis", None),
+            "eolis": cached_data.get("eolis", None),
             "smb": cached_data.get("smb", None),
             "runoff_data": cached_data.get("runoff", None),
             "outlines": cached_data.get("outlines", None),
@@ -482,16 +487,17 @@ class CryotempoSelection(param.Parameterized):
 
         runoff_data = data["runoff_data"]
         gdir = data["gdir"]
-        datacube = data["datacube"]
+        datacube = data["eolis"]
         smb = data["smb"]
 
         fig_monthly_runoff = self.plot_graph.plot_runoff_timeseries(
-            runoff=runoff_data["monthly_runoff"], ref_year=self.year
+            runoff=runoff_data["monthly_runoff"], ref_year=self.year, nyears=27
         )
         fig_runoff_cumulative = self.plot_graph.plot_runoff_timeseries(
             runoff=runoff_data["monthly_runoff"],
             ref_year=self.year,
             cumulative=True,
+            nyears=27,
         )
         fig_daily_mb = self.plot_cryo.plot_mb_comparison(
             smb=smb,
@@ -566,9 +572,7 @@ class CryotempoSelection(param.Parameterized):
         return self.artist.dashboard
 
     def plot_dashboard_l1(
-        self,
-        data,
-        glacier_name: str = "",
+        self, data, glacier_name: str = "", model_name: str = "DailyTIModel"
     ) -> hv.Layout:
         """Plot a dashboard showing runoff data.
 
@@ -590,37 +594,45 @@ class CryotempoSelection(param.Parameterized):
         self.plot_graph = dtcg_plotting.BokehGraph()
         self.plot_map = dtcg_plotting.BokehMapOutlines()
 
-        runoff_data = data["runoff_data"]
+        runoff_data = data["runoff_data"]["Daily_Hugonnet_2000_2020"]
         gdir = data["gdir"]
-        datacube = data["datacube"]
+        datacube = data.get("eolis", None)
         smb = data["smb"]
-        if len(smb.keys()) > 1:
-            for key, value in smb.items():
-                if "CryoTEMPO-EOLIS" in key:
-                    smb = {key: value}
+
+        # if len(smb.keys()) > 1:
+        #     for key, value in smb.items():
+        #         if "Cryosat" in key:
+        #             smb = {key: value}
+        # else:
+        # smb = smb["Daily_Hugonnet_2000_2020"]
 
         fig_monthly_runoff = self.plot_graph.plot_runoff_timeseries(
-            runoff=runoff_data["monthly_runoff"], ref_year=self.year
+            runoff=runoff_data["monthly_runoff"], ref_year=self.year, nyears=27
         )
         fig_runoff_cumulative = self.plot_graph.plot_runoff_timeseries(
             runoff=runoff_data["monthly_runoff"],
             ref_year=self.year,
             cumulative=True,
+            nyears=27,
         )
+
         fig_daily_mb = self.plot_cryo.plot_mb_comparison(
             smb=smb,
             ref_year=self.year,
-            datacube=None,
+            datacube=datacube,
             gdir=gdir,
             cumulative=False,
+            model_name=model_name,
         )
         fig_cumulative_mb = self.plot_cryo.plot_mb_comparison(
             smb=smb,
             ref_year=self.year,
-            datacube=None,
+            datacube=datacube,
             gdir=gdir,
             cumulative=True,
+            model_name=model_name,
         )
+
         figures = [
             fig_daily_mb.opts(title=f"Specific Mass Balance (OGGM)"),
             fig_cumulative_mb.opts(title=f"Cumulative Specific Mass Balance (OGGM)"),
@@ -690,7 +702,7 @@ class CryotempoSelection(param.Parameterized):
         self.plot_map = dtcg_plotting.BokehMapOutlines()
 
         gdir = data["gdir"]
-        datacube = data["datacube"]
+        datacube = data["eolis"]
         figures = []
         if datacube is not None:
             fig_eo_elevation = self.plot_cryo.plot_eolis_timeseries(

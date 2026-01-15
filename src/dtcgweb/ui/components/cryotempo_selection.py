@@ -333,7 +333,7 @@ class CryotempoSelection(param.Parameterized):
         return self.region_name_html
 
     def get_zipped_datacube(
-        self, rgi_id, zip_path=Path("./static/data/zarr_data/")
+        self, rgi_id, zip_path=Path("/static/data/zarr_data/")
     ) -> Path:
         # pn.state.notifications.info("Zipping, please wait...", duration=2000)
         try:

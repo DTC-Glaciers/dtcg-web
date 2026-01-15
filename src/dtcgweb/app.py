@@ -56,14 +56,14 @@ def set_network_ports():
         # app = FastAPI()
         # use this until certain 127.0.0.1 is not used in DinD server.
         port = 8080
-        app = FastAPI(root_path="/dtcgweb")
+        app = FastAPI()
     return app, hostname, port
 
 
 app, hostname, port = set_network_ports()
 
 BASE_DIR = Path(__file__).resolve().parent
-# app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
+app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
 templates = Jinja2Templates(directory=f"{BASE_DIR/'templates'}")
 
 
@@ -80,6 +80,7 @@ app.add_middleware(  # TODO: Bremen cluster support
         "dtcg.github.io",
         "bokeh.oggm.org",
         "bokeh.oggm.org/dtcgweb",
+        "0.0.0.0",
     ],
 )
 

@@ -37,7 +37,7 @@ classifiers = [
 dependencies = [
     "fastapi[standard]",
     "panel[fastapi]",
-    "dtcg @ git+https://github.com/DTC-Glaciers/dtcg@v0.5.0",
+    "dtcg @ git+https://github.com/DTC-Glaciers/dtcg@release/1.0.0",
     "oggm @ git+https://github.com/gampnico/oggm@feat-dtcg",
     "param",
     "bokeh",

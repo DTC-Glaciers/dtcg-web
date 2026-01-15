@@ -20,19 +20,17 @@ DTCG web interface.
 
 import os
 from pathlib import Path
-import subprocess
 
-from fastapi import FastAPI, Request
+import xarray as xr
+import zarr
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from panel.io.fastapi import add_application
 
-from dtcgweb.ui.interface.apps.pn_eolis import (
-    get_eolis_dashboard,
-    get_eolis_dashboard_with_selection,
-)
+from dtcgweb.ui.interface.apps.pn_eolis import get_eolis_dashboard_with_selection
 
 
 # hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
@@ -65,7 +63,6 @@ def set_network_ports():
 app, hostname, port = set_network_ports()
 
 BASE_DIR = Path(__file__).resolve().parent
-# app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
 templates = Jinja2Templates(directory=f"{BASE_DIR/'templates'}")
 
 
@@ -85,6 +82,7 @@ app.add_middleware(  # TODO: Bremen cluster support
     ],
 )
 
+app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
 
 def get_static_file(file_name: str):
     """Handler for returning static files.
@@ -129,6 +127,46 @@ async def get_404_handler(request, __):
 
 
 """Serve dashboard"""
+
+
+def stream_datacube(rgi_id):
+    stream_url = f"https://cluster.klima.uni-bremen.de/~dtcg/datacubes_case_study_regions/v2026.2/L1_and_L2/{rgi_id}.zarr/"
+
+    zipfile = f"./static/data/zarr_data/{rgi_id}.zarr.zip"
+    store = zarr.storage.ZipStore(zipfile, mode="w")
+    try:
+        with xr.open_datatree(
+            stream_url,
+            group=None,
+            chunks={},
+            engine="zarr",
+            consolidated=True,
+            decode_cf=True,
+        ) as stream:
+            stream.compute().to_zarr(
+                store=store,
+                #     f"/static/data/zarr_data/{rgi_id}.zarr/",
+                mode="w",
+                consolidated=True,
+                zarr_format=2,
+                # encoding=stream.encoding,
+            )
+    except zarr.errors.GroupNotFoundError:
+        raise HTTPException(status_code=403, detail="This data cube does not exist.")
+    return zipfile
+
+
+@app.get("/api/zarr/{rgi_id}")
+async def download_datacube(rgi_id: str, format: str = "zarr"):
+    # return StreamingResponse(stream_datacube(rgi_id=rgi_id))
+    if format == "zip":
+        return FileResponse(
+            stream_datacube(rgi_id=rgi_id), filename=f"{rgi_id}.zarr.{format}"
+        )
+    else:
+        return RedirectResponse(
+            url=f"https://cluster.klima.uni-bremen.de/~dtcg/datacubes_case_study_regions/v2026.2/L1_and_L2/{rgi_id}.zarr/"
+        )
 
 
 @app.get("/")

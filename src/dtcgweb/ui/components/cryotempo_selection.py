@@ -121,7 +121,9 @@ class CryotempoSelection(param.Parameterized):
         self.plot_title = pn.pane.HTML()
         self.map = pn.FlexBox()
         self.binder = oggm_bindings.BindingsCryotempo()
-        self.streamer = StreamDatacube()
+        self.streamer = StreamDatacube(
+            server="https://cluster.klima.uni-bremen.de/~dtcg/datacubes_case_study_regions/v2026.2/L1_and_L2/"
+        )
         if not self.cached_data:
             self.binder.init_oggm(dirname="test")
         self.cache_path = Path("./static/data/l2_precompute").resolve()

@@ -63,7 +63,6 @@ def set_network_ports():
 app, hostname, port = set_network_ports()
 
 BASE_DIR = Path(__file__).resolve().parent
-# app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
 templates = Jinja2Templates(directory=f"{BASE_DIR/'templates'}")
 
 
@@ -83,6 +82,7 @@ app.add_middleware(  # TODO: Bremen cluster support
     ],
 )
 
+app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
 
 def get_static_file(file_name: str):
     """Handler for returning static files.

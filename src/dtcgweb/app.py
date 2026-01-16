@@ -82,7 +82,7 @@ app.add_middleware(  # TODO: Bremen cluster support
     ],
 )
 
-app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
+# app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
 
 def get_static_file(file_name: str):
     """Handler for returning static files.

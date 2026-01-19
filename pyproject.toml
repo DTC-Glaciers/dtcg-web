@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dtcgweb"
-version = "1.0.1"
+version = "1.0.2"
 authors = [
     { name = "DTCG Contributors", email = "" },
 ]
@@ -37,7 +37,7 @@ classifiers = [
 dependencies = [
     "fastapi[standard]",
     "panel[fastapi]",
-    "dtcg @ git+https://github.com/DTC-Glaciers/dtcg@release/1.0.0",
+    "dtcg @ git+https://github.com/DTC-Glaciers/dtcg@release/1.0.1",
     "oggm @ git+https://github.com/gampnico/oggm@feat-dtcg",
     "param",
     "bokeh",

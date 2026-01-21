@@ -343,6 +343,7 @@ class CryotempoSelection(param.Parameterized):
             pn.state.notifications.error(
                 "No datacube available for this glacier.", duration=3000
             )
+            path = ""
         finally:
             return path  # avoid unbound local errors and other such things
 

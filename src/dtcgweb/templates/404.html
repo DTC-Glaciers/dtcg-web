@@ -4,13 +4,16 @@
 <head>
     <meta charset="utf-8">
     <title>404 Not Found</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='/favicon.ico') }}">
 </head>
 
 <body>
     <!-- 404 not found -->
-    <link rel="stylesheet" href="/static/assets/css/404style.css">
+    <!-- <link rel="stylesheet" href="/static/assets/css/404style.css"> -->
+    <link rel="stylesheet" href="{{ url_for('static', path='/assets/css/404style.css') }}">
     <div class="logo-area">
-        <img src="/logo.png" alt="DTC Glaciers">
+        <img src="{{ url_for('static', path='/logo.png') }}" alt="DTC Glaciers">
+        <!-- <img src="/logo.png" alt="DTC Glaciers"> -->
         <!-- <div id="floated">
             <p>DTC</p>Glaciers
         </div> -->

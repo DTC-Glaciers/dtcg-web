@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dtcgweb"
-version = "1.0.3"
+version = "1.0.4"
 authors = [
     { name = "DTCG Contributors", email = "" },
 ]
@@ -44,6 +44,38 @@ dependencies = [
     "bokeh-fastapi",
     "holoviews",
     "geopandas",
+]
+
+[dependency-groups]
+oggm = [
+    "oggm @ git+https://github.com/gampnico/oggm@feat-dtcg",
+    "pandas",
+    "numpy",
+    "scipy",
+    "shapely",
+    "matplotlib",
+    "Pillow",
+    "netcdf4",
+    "scikit-image",
+    "scikit-learn",
+    "configobj",
+    "xarray",
+    "dask",
+    "bottleneck",
+    "pyproj",
+    "cartopy",
+    "geopandas",
+    "rasterio",
+    "rioxarray",
+    "seaborn",
+    "tables",  # pytables
+    "salem",
+    "motionless",
+    "ipython",
+    "seaborn",
+    "joblib",
+    "progressbar2",
+    "pytest-mpl @ git+https://github.com/OGGM/pytest-mpl",
 ]
 
 [project.optional-dependencies]

@@ -63,6 +63,7 @@ def set_network_ports():
 app, hostname, port = set_network_ports()
 
 BASE_DIR = Path(__file__).resolve().parent
+# app.mount("/static", StaticFiles(directory=f"{BASE_DIR / 'static'}"), name="static")
 templates = Jinja2Templates(directory=f"{BASE_DIR/'templates'}")
 
 
@@ -82,7 +83,6 @@ app.add_middleware(  # TODO: Bremen cluster support
     ],
 )
 
-# app.mount("/static", StaticFiles(directory=f"{BASE_DIR/'static'}"), name="static")
 
 def get_static_file(file_name: str):
     """Handler for returning static files.
@@ -93,7 +93,9 @@ def get_static_file(file_name: str):
         Name of file relative to ``static`` directory.
     """
     file_path = Path(app.root_path)
-    file_path = file_path / "static" / file_name
+    # file_path = "/app"/ file_path / "static" / file_name
+    file_path = f"{BASE_DIR}/static/{file_name}"
+    # file_path = Path("/static" / file_name)
 
     return FileResponse(
         path=file_path,
@@ -114,7 +116,7 @@ async def css_404():
 @app.get("/logo.png", include_in_schema=False)
 async def get_logo():
     """Get website logo."""
-    return get_static_file("img/dtc_logo.png")
+    return get_static_file("logo.png")
 
 
 """Error handling"""

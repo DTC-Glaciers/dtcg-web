@@ -125,7 +125,7 @@ class CryotempoSelection(param.Parameterized):
             server="https://cluster.klima.uni-bremen.de/~dtcg/datacubes_case_study_regions/v2026.2/L1_and_L2/"
         )
         if not self.cached_data:
-            self.binder.init_oggm(dirname="test")
+            self.binder.init_oggm(working_dir="test")
         self.cache_path = Path("./static/data/l2_precompute").resolve()
         self.artist = dtcg_plotting.HoloviewsDashboardL1()
         self.data = None
@@ -433,7 +433,7 @@ class CryotempoSelection(param.Parameterized):
             Glacier directory, EOLIS-enhanced gridded data, and
             specific mass balance.
         """
-        self.binder.init_oggm(dirname="test")
+        self.binder.init_oggm(working_dir="test")
         gdir = self.binder.get_glacier_directories(
             rgi_ids=rgi_ids, prepro_level=4, prepro_border=80
         )[0]

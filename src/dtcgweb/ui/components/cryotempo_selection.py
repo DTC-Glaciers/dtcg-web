@@ -187,7 +187,7 @@ class CryotempoSelection(param.Parameterized):
         ]:
             self.param[p_name].precedence = -1
 
-    @param.depends("rgi_id", "region_name_html", "glacier_name", watch=True)
+    @param.depends("rgi_id", "region_name_html", "glacier_name", "year", watch=True)
     def set_plot_metadata(self):
         if not self.glacier_name:
             glacier_name = "Hintereisferner"

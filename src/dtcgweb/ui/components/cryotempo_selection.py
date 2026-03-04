@@ -18,6 +18,7 @@ Copyright 2025-2026 DTCG Contributors
 Panel wrapper displaying runoff for specific glaciers.
 """
 
+import asyncio
 from datetime import date
 from pathlib import Path
 
@@ -28,12 +29,14 @@ import holoviews as hv
 import panel as pn
 import param
 from dtcg.api.external.call import StreamDatacube
+from holoviews.operation.datashader import datashade
 
+import time
 pn.extension(
     design="material",
     sizing_mode="stretch_width",
     defer_load=True,
-    loading_indicator=True,
+    loading_indicator=False,
     notifications=True,
 )
 hv.extension("bokeh")
@@ -76,7 +79,7 @@ class CryotempoSelection(param.Parameterized):
     )
     region_name_html = param.String("Central Europe")
     _glacier_names = param.List()
-    _glacier_rgi_ids = param.List()
+    # _glacier_rgi_ids = param.List()
     glacier_name = param.Selector()
     year = param.Selector(
         objects=range(int(date.today().year) - 1, 1999, -1),
@@ -104,6 +107,7 @@ class CryotempoSelection(param.Parameterized):
     def __init__(self, **params):
         super(CryotempoSelection, self).__init__(**params)
         self.figure = hv.Layout()
+        # self.loading_indicator = pn.indicators.LoadingSpinner(visible=False)
         self.plot_oggm = pn.FlexBox(
             sizing_mode="stretch_width",
             styles={
@@ -111,6 +115,7 @@ class CryotempoSelection(param.Parameterized):
                 "align-items": "stretch",
                 "align-content": "flex-start",
                 "flex-wrap": "nowrap",
+                
             },
         )
         self.plot_cryosat = pn.FlexBox(
@@ -128,6 +133,8 @@ class CryotempoSelection(param.Parameterized):
             self.binder.init_oggm(working_dir="test")
         self.cache_path = Path("./static/data/l2_precompute").resolve()
         self.artist = dtcg_plotting.HoloviewsDashboardL1()
+        self.plot_cryo = dtcg_plotting.BokehSynthetic()
+        self.plot_map = dtcg_plotting.BokehMapOutlines()
         self.data = None
         self.details = pn.pane.HTML()
         self.tap = hv.streams.Selection1D()
@@ -144,8 +151,12 @@ class CryotempoSelection(param.Parameterized):
         self._hide_params()
         # self.data_store = self.get_data_store()
 
+        # pn.io.loading.start_loading_spinner(self.plot_oggm)
+        
         self.set_plot()
         self.set_map()
+        # pn.io.loading.stop_loading_spinner(self.plot_oggm)
+        
         self.set_details()
         # self.download_button = pn.widgets.FileDownload(
         #     callback=pn.bind(self.download_datacube, rgi_id=self.rgi_id), filename=self.rgi_id
@@ -178,7 +189,7 @@ class CryotempoSelection(param.Parameterized):
             "oggm_params",
             "action",
             "_glacier_names",
-            "_glacier_rgi_ids",
+            # "_glacier_rgi_ids",
             "cached_data",
             "metadata",
             "debug",
@@ -187,8 +198,9 @@ class CryotempoSelection(param.Parameterized):
         ]:
             self.param[p_name].precedence = -1
 
-    @param.depends("rgi_id", "region_name_html", "glacier_name", "year", watch=True)
+    @param.depends("glacier_name", "year", watch=True)
     def set_plot_metadata(self):
+        start_time = time.time()
         if not self.glacier_name:
             glacier_name = "Hintereisferner"
         else:
@@ -196,6 +208,8 @@ class CryotempoSelection(param.Parameterized):
         self.region_name_html = self.set_region_name()
         title = f"{glacier_name}, {self.region_name_html} ({self.year})"
         self.plot_title.object = f"""<h1>{title}</h1>"""
+        elapsed_time = time.time() - start_time
+        print(f"set_plot_metadata took {elapsed_time:.2f} seconds")
 
     def get_metadata(self) -> dict:
         """Get glacier metadata.
@@ -231,59 +245,86 @@ class CryotempoSelection(param.Parameterized):
 
     @param.depends("region_name", watch=True)
     def get_glacier_names(self):
-        glacier_names = self.metadata["glacier_names"][self.region_name]
+        start_time = time.time()
         glacier_hash = {}
-        for k, v in glacier_names.items():
+        for k, v in self.metadata["glacier_names"][self.region_name].items():
             glacier_hash.update({v["Name"]: k})
         self.metadata["hash"] = glacier_hash
         self._glacier_names = sorted(list(glacier_hash.keys()))
-        self._glacier_rgi_ids = sorted(list(glacier_hash.values()))
+        elapsed_time = time.time() - start_time
+        print(f"get_glacier_names took {elapsed_time:.2f} seconds")
+        # self._glacier_rgi_ids = sorted(list(glacier_hash.values()))
 
     @param.depends("year", "debug", "glacier_name", "oggm_model", watch=True)
-    def set_plot(self):
+    async def set_plot(self):
         """Set component graphics.
 
         This updates the main dashboard content.
         """
-
+        # self.loading_indicator.visible = True
+        # pn.io.loading.start_loading_spinner(self.plot_oggm)
+        # success = pn.state.notifications.success('This is a success notification.', duration=0)
+        print("set plot")
+        start_time = time.time()
         if self.data is not None:
 
-            rgi_id = self.get_rgi_id(self.glacier_name)
-            if rgi_id not in self.data.keys():
-                data = self.get_cached_data(rgi_id=rgi_id)
-                self.data[rgi_id] = data
-            data = self.data[rgi_id]
-            self.figure = self.plot_dashboard_l1(
+            # rgi_id = self.get_rgi_id(self.glacier_name)
+            if self.rgi_id not in self.data.keys():
+                self.data[self.rgi_id] = self.get_cached_data(rgi_id=self.rgi_id)
+            await asyncio.to_thread(self.get_plot(data=self.data[self.rgi_id]))
+            # success.destroy()
+            # await pn.io.loading.stop_loading_spinner(self.plot_oggm)
+            # self.figure = self.plot_dashboard_l1(
+            #     data=data,
+            #     glacier_name=self.glacier_name,
+            #     model_name=self.oggm_model,
+            # )
+            # self.plot_oggm.objects = [i for i in self.artist.figures]
+            # self.figure = self.plot_dashboard_l2(
+            #     data=data,
+            #     glacier_name=self.glacier_name,
+            # )
+            # self.plot_cryosat.objects = [i for i in self.artist.figures]
+        # await pn.io.loading.stop_loading_spinner(self.plot_map)
+        # success.destroy()
+        # self.loading_indicator.visible = False
+        elapsed_time = time.time() - start_time
+        print(f"set_plot took {elapsed_time:.2f} seconds")
+
+    def get_plot(self, data):
+        """Get the main plot."""
+        # pn.io.loading.start_loading_spinner(self.plot_oggm)
+        self.figure = self.plot_dashboard_l1(
                 data=data,
                 glacier_name=self.glacier_name,
                 model_name=self.oggm_model,
             )
-            self.plot_oggm.objects = [i for i in self.figures]
-            self.figure = self.plot_dashboard_l2(
+        self.plot_oggm.objects = [i for i in self.artist.figures]
+        self.figure = self.plot_dashboard_l2(
                 data=data,
                 glacier_name=self.glacier_name,
             )
-            self.plot_cryosat.objects = [i for i in self.figures]
+        self.plot_cryosat.objects = [i for i in self.artist.figures]
+        # pn.io.loading.start_loading_spinner(self.plot_oggm)
+        # pn.io.loading.stop_loading_spinner(self.plot_oggm)
+
 
     @param.depends("debug", "glacier_name", watch=True)
-    def set_map(self):
+    async def set_map(self):
         if self.data is not None:
-            rgi_id = self.get_rgi_id(glacier_name=self.glacier_name)
-            data = self.data[rgi_id]
-
-            glacier_map = self.plot_selection_map(data=data, rgi_id=rgi_id).opts(
+            glacier_map = self.plot_selection_map(rgi_id=self.rgi_id).opts(
                 max_width=250
             )
             self.tap.source = glacier_map
             self.map.objects = [glacier_map]
 
     @param.depends("debug", "glacier_name", watch=True)
-    def set_details(self):
+    async def set_details(self):
 
         if self.data is not None:
-            rgi_id = self.get_rgi_id(self.glacier_name)
+            # rgi_id = self.get_rgi_id(self.glacier_name)
             details = self.binder.get_outline_details(
-                polygon=self.data[rgi_id]["outlines"].iloc[0]
+                polygon=self.data[self.rgi_id]["outlines"].iloc[0]
             )
             table = ""
             for k, v in details.items():
@@ -317,8 +358,8 @@ class CryotempoSelection(param.Parameterized):
     def set_region_name(self):
         """Set region name from RGI ID."""
 
-        rgi_id = self.get_rgi_id(self.glacier_name)
-        region_id = rgi_id.split("-")[1]
+        # rgi_id = self.get_rgi_id(self.glacier_name)
+        region_id = self.rgi_id.split("-")[1]
 
         if "11." in region_id:
             self.param.update(region_name_html="Central Europe")
@@ -378,7 +419,7 @@ class CryotempoSelection(param.Parameterized):
         }
 
     @param.depends("rgi_id", "glacier_name", watch=True)
-    def set_dashboard_data_cached(self) -> dict:
+    async def set_dashboard_data_cached(self) -> dict:
         """Get data from precomputed cache.
 
         This skips all processing steps, and the data is loaded into the
@@ -395,8 +436,8 @@ class CryotempoSelection(param.Parameterized):
 
         if self.data is None:
             self.data = {}
-        data = self.get_cached_data(rgi_id=self.rgi_id)
-        self.data[self.rgi_id] = data
+        if self.rgi_id not in self.data.keys():
+            self.data[self.rgi_id] = await asyncio.to_thread(self.get_cached_data(rgi_id=self.rgi_id))
 
     def get_cached_data(self, rgi_id: str) -> dict:
         """Load a single precomputed glacier data file.
@@ -473,7 +514,7 @@ class CryotempoSelection(param.Parameterized):
 
         return shapefile
 
-    def plot_selection_map(self, data: dict, rgi_id: str = "") -> hv.Layout:
+    def plot_selection_map(self, rgi_id: str = "") -> hv.Layout:
         """Plot map showing the selected glacier.
 
         Parameters
@@ -489,7 +530,6 @@ class CryotempoSelection(param.Parameterized):
         hv.Layout
             Dashboard showing a map of the subregion and runoff data.
         """
-        self.plot_map = dtcg_plotting.BokehMapOutlines()
         try:
             region_id = int(rgi_id[6:8])
             shapefile = self.get_cached_region_outlines(region_id=region_id)
@@ -521,19 +561,17 @@ class CryotempoSelection(param.Parameterized):
             Dashboard showing EO and modelled specific mass balance and
             runoff.
         """
-        self.plot_cryo = dtcg_plotting.BokehSynthetic()
-        self.plot_graph = dtcg_plotting.BokehGraph()
-        self.plot_map = dtcg_plotting.BokehMapOutlines()
+        self.artist.plot_graph = dtcg_plotting.BokehGraph()
 
         runoff_data = data["runoff_data"]
         gdir = data["gdir"]
         datacube = data["eolis"]
         smb = data["smb"]
 
-        fig_monthly_runoff = self.plot_graph.plot_runoff_timeseries(
+        fig_monthly_runoff = self.artist.plot_graph.plot_runoff_timeseries(
             runoff=runoff_data["monthly_runoff"], ref_year=self.year, nyears=27
         )
-        fig_runoff_cumulative = self.plot_graph.plot_runoff_timeseries(
+        fig_runoff_cumulative = self.artist.plot_graph.plot_runoff_timeseries(
             runoff=runoff_data["monthly_runoff"],
             ref_year=self.year,
             cumulative=True,
@@ -588,7 +626,7 @@ class CryotempoSelection(param.Parameterized):
                 fig_monthly_runoff,
                 fig_runoff_cumulative,
             ]
-        self.figures = figures
+        self.artist.figures = figures
 
         if glacier_name:
             self.artist.set_dashboard_title(name=self.glacier_name)
@@ -630,9 +668,6 @@ class CryotempoSelection(param.Parameterized):
             Dashboard showing EO and modelled specific mass balance and
             runoff.
         """
-        self.plot_cryo = dtcg_plotting.BokehSynthetic()
-        self.plot_graph = dtcg_plotting.BokehGraph()
-        self.plot_map = dtcg_plotting.BokehMapOutlines()
 
         runoff_data = data["runoff_data"]["Daily_Hugonnet_2000_2020"]
         gdir = data["gdir"]
@@ -646,10 +681,10 @@ class CryotempoSelection(param.Parameterized):
         # else:
         # smb = smb["Daily_Hugonnet_2000_2020"]
 
-        fig_monthly_runoff = self.plot_graph.plot_runoff_timeseries(
+        fig_monthly_runoff = self.artist.plot_graph.plot_runoff_timeseries(
             runoff=runoff_data["monthly_runoff"], ref_year=self.year, nyears=27
         )
-        fig_runoff_cumulative = self.plot_graph.plot_runoff_timeseries(
+        fig_runoff_cumulative = self.artist.plot_graph.plot_runoff_timeseries(
             runoff=runoff_data["monthly_runoff"],
             ref_year=self.year,
             cumulative=True,
@@ -689,7 +724,7 @@ class CryotempoSelection(param.Parameterized):
                 fig_monthly_runoff,
                 fig_runoff_cumulative,
             ]
-        self.figures = figures
+        self.artist.figures = figures
 
         if glacier_name:
             self.artist.set_dashboard_title(name=self.glacier_name)
@@ -737,9 +772,6 @@ class CryotempoSelection(param.Parameterized):
             Dashboard showing EO and modelled specific mass balance and
             runoff.
         """
-        self.plot_cryo = dtcg_plotting.BokehSynthetic()
-        self.plot_graph = dtcg_plotting.BokehGraph()
-        self.plot_map = dtcg_plotting.BokehMapOutlines()
 
         gdir = data["gdir"]
         datacube = data["eolis"]
@@ -762,7 +794,7 @@ class CryotempoSelection(param.Parameterized):
                 fig_eo_elevation,
                 fig_eo_smb,
             ]
-        self.figures = figures
+        self.artist.figures = figures
 
         if not glacier_name:
             glacier_name = gdir.get("name", "")
@@ -783,7 +815,7 @@ class CryotempoSelection(param.Parameterized):
             self.artist.dashboard = pn.Column(
                 "No CryoSat data available.", name="CryoSat Data"
             )
-            self.figures = [
+            self.artist.figures = [
                 pn.Column("No CryoSat data available.", name="CryoSat Data")
             ]
 

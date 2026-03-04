@@ -29,9 +29,33 @@ from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from panel.io.fastapi import add_application
+import panel as pn
+from contextlib import asynccontextmanager
+
+from pyinstrument import Profiler
+from pyinstrument.renderers.html import HTMLRenderer
+from pyinstrument.renderers.speedscope import SpeedscopeRenderer
+
+# pn.extension(loading_spinner='arcs', loading_color='black', template='material')
+
+from pydantic_settings import BaseSettings
 
 from dtcgweb.ui.interface.apps.pn_eolis import get_eolis_dashboard_with_selection
 
+class Settings(BaseSettings):
+    PROFILING_ENABLED: bool = True
+settings = Settings()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    
+    pn.config.loading_spinner = "arcs"
+    pn.config.loading_color = 'black'
+    
+    # pn.param.ParamMethod.loading_indicator = False
+    # pn.io.loading.start_loading_spinner(self.plot)
+    yield 
+    # yield
+    # pn.param.ParamMethod.loading_indicator = False
 
 # hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
 # port = 8080
@@ -50,17 +74,59 @@ def set_network_ports():
     hostname = os.getenv("WS_ORIGIN", "127.0.0.1")
     if hostname != "127.0.0.1":
         port = 8080
-        app = FastAPI(root_path="/dtcgweb")
+        app = FastAPI(root_path="/dtcgweb",lifespan=lifespan)
     else:
-        # port = 8080
-        # app = FastAPI()
-        # use this until certain 127.0.0.1 is not used in DinD server.
         port = 8080
-        app = FastAPI(root_path="/dtcgweb")
+        app = FastAPI(lifespan=lifespan, PROFILING_ENABLED=True)
+        # use this until certain 127.0.0.1 is not used in DinD server.
+        # port = 8080
+        # app = FastAPI(root_path="/dtcgweb")
     return app, hostname, port
 
 
 app, hostname, port = set_network_ports()
+
+def register_middlewares(app: FastAPI):
+    ...
+    if True:
+
+        @app.middleware("http")
+        async def profile_request(request: Request, call_next):
+            """Profile the current request
+
+            Taken from https://pyinstrument.readthedocs.io/en/latest/guide.html#profile-a-web-request-in-fastapi
+            with small improvements.
+
+            """
+            # we map a profile type to a file extension, as well as a pyinstrument profile renderer
+            profile_type_to_ext = {"html": "html", "speedscope": "speedscope.json"}
+            profile_type_to_renderer = {
+                "html": HTMLRenderer,
+                "speedscope": SpeedscopeRenderer,
+            }
+
+            # if the `profile=true` HTTP query argument is passed, we profile the request
+            if request.query_params.get("profile", False):
+
+                # The default profile format is speedscope
+                profile_type = request.query_params.get("profile_format", "speedscope")
+
+                # we profile the request along with all additional middlewares, by interrupting
+                # the program every 1ms1 and records the entire stack at that point
+                with Profiler(interval=0.001, async_mode="enabled") as profiler:
+                    response = await call_next(request)
+
+                # we dump the profiling into a file
+                extension = profile_type_to_ext[profile_type]
+                renderer = profile_type_to_renderer[profile_type]()
+                with open(f"profile.{extension}", "w") as out:
+                    out.write(profiler.output(renderer=renderer))
+                return response
+
+            # Proceed without profiling
+            return await call_next(request)
+
+register_middlewares(app)
 
 BASE_DIR = Path(__file__).resolve().parent
 # app.mount("/static", StaticFiles(directory=f"{BASE_DIR / 'static'}"), name="static")
@@ -185,6 +251,7 @@ async def read_root(request: Request):
     "/app",
     app=app,
     title="DTCG Dashboard",
+    loading_indicator=False,
     # address=hostname,
     # port=f"{port}",
     # show=False,
